@@ -28,7 +28,9 @@ record: test id, date and failing output summary.
   can start in parallel with US1, but its UI is easiest to check after US1.
 - **US3** (P1, dashboard + end): uses US2's submissions.
 - **US4** (P2, teammates' live view): uses US2.
-- **US5** (P2, cancel DRAFT): needs only the Foundational phase.
+- **US5** (P2, cancel DRAFT): the cancel itself needs only the Foundational phase. The test
+  parts that join or submit (in T045 and T046) also need US2's T029 and T030, and the
+  open-vs-cancel race needs T021.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -320,6 +322,7 @@ the final dashboard survives a refresh (FR-026 – FR-029, FR-005, FR-017).
 
 - [ ] T033 [P] [US3] Extend `tests/unit/test_activity_phases.py` with the end, dashboard and displayed-activity parts:
   - `end_activity` on OPEN returns phase CLOSED;
+  - **closing with zero submissions** (US3 AS6, edge case): `end_activity` on an OPEN activity with no submissions succeeds, and `get_dashboard` then lists every unit with `submissions: []` and every group;
   - on DRAFT it raises `PhaseConflict(DRAFT)`, and the message contains "Cancel activity";
   - on CLOSED it raises `PhaseConflict(CLOSED)`; on a missing id, `ActivityNotFound`;
   - success publishes teacher snapshots and calls `student_publisher` after the commit, and a refusal publishes nothing;
@@ -459,7 +462,10 @@ activity gives 409.
 - **US3 (Phase 5)**: needs US2's `submit` (T030) for dashboard data. T037's end can be written
   in parallel with US2.
 - **US4 (Phase 6)**: needs US2 (T029, T030).
-- **US5 (Phase 7)**: needs Foundational only. T046's open-vs-cancel race needs T021.
+- **US5 (Phase 7)**: T048 and T049 need Foundational only. The test parts that use join or submit
+  need T029 and T030: in T045, the old token gives `NotAMember`; in T046, the join-vs-cancel race.
+  T046's open-vs-cancel race needs T021. Write those parts after US2, or mark them `skip` until
+  then.
 - **Polish (Phase 8)**: needs every story you intend to ship.
 
 ### Within each story
