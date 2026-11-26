@@ -42,7 +42,10 @@ def settings(db_path: Path) -> Settings:
 
 @pytest.fixture
 def app(fake_adapter: FakeSheetsAdapter, db_path: Path, settings: Settings):
-    return create_app(adapter=fake_adapter, db_path=db_path, settings=settings)
+    # 003: the fake also acts as the write-scoped SheetsWriter (003 research R9).
+    return create_app(
+        adapter=fake_adapter, db_path=db_path, settings=settings, writer=fake_adapter
+    )
 
 
 @pytest.fixture

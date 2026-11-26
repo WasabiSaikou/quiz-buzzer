@@ -54,6 +54,7 @@ from quizbuzzer.services.sheets_adapter import (
     SheetNotShared,
     SheetsAdapter,
     SheetsUnavailable,
+    SheetsWriter,
 )
 
 log = logging.getLogger("quizbuzzer")
@@ -255,6 +256,7 @@ def create_app(
     adapter: SheetsAdapter | None = None,
     db_path: str | Path | None = None,
     settings: Settings | None = None,
+    writer: SheetsWriter | None = None,
 ) -> FastAPI:
     settings = settings or load_settings()
     if not settings.teacher_passcode.strip():
@@ -271,6 +273,8 @@ def create_app(
     app.state.settings = settings
     app.state.db_path = db_path
     app.state.adapter = adapter if adapter is not None else LazyGoogleSheetsAdapter(settings)
+    # 003 research R1: a separate, write-scoped client used only by the export.
+    app.state.writer = writer
     app.state.hub = RealtimeHub()
     app.state.participation = ParticipationService(db_path, app.state.hub)
     app.state.service = ActivityService(

@@ -151,3 +151,19 @@ secrets, no student data, Principle VI).
 | Date | Commit | Result | Notes |
 |---|---|---|---|
 | 2026-11-27 | `26daae0` + Polish | **410 passed**, 0 skipped, ~63 s | Includes SC-003 (100 rounds × 12 groups), submit vs end (50 rounds), the SC-005 leak test. Push latency at 60 student + 2 teacher sockets: OPEN 0.046–0.063 s, submission 0.015–0.031 s (3 runs; SC-001 / SC-002 target < 1 s) |
+
+---
+
+# Feature 003 — Results, sheet export and CSV
+
+Spec: [specs/003-results-export/spec.md](../specs/003-results-export/spec.md) ·
+Tasks: [tasks.md](../specs/003-results-export/tasks.md). Baseline before 003 work: **410
+passed** at `01ffa52` (2026-11-27).
+
+## Test-first record (003)
+
+Each core-rule test was written first, run, and **observed failing** before its implementation.
+
+| Phase | Tests written first | Red run (summary) | Green run | Commit |
+|---|---|---|---|---|
+| 1 · Setup: fake SheetsWriter | `unit/test_fake_sheets_adapter.py` (003 part, T003) | 6 failed (`write_cells`, `writes`, `make_read_only` missing), 11 passed (pre-existing) | 416 passed (full suite) | Setup commit |

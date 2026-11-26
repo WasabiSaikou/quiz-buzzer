@@ -17,8 +17,11 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from quizbuzzer.models import Merge, SpreadsheetInfo, TabData, TabInfo
-from quizbuzzer.services.sheets_adapter import SheetNotFound
+import re
+from collections.abc import Sequence
+
+from quizbuzzer.models import CellWrite, Merge, SpreadsheetInfo, TabData, TabInfo
+from quizbuzzer.services.sheets_adapter import SheetNotFound, SheetReadOnly
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "sheets"
 FAKE_SERVICE_ACCOUNT_EMAIL = "quiz-buzzer-test@example-project.iam.gserviceaccount.com"
@@ -52,6 +55,9 @@ class FakeSheetsAdapter:
         self._sheets: dict[str, _Spreadsheet] = {}
         self._failure: Exception | None = None
         self.calls: list[tuple[str, tuple]] = []
+        # Feature 003: the fake is also a SheetsWriter (003 research R9).
+        self.writes: list[tuple[str, int, str, tuple[CellWrite, ...]]] = []
+        self._read_only: set[str] = set()
         if fixtures_dir is not None:
             self.load_dir(fixtures_dir)
 
@@ -87,6 +93,49 @@ class FakeSheetsAdapter:
                     merges=list(tab.merges),
                 )
         raise SheetNotFound(f"No tab with id {sheet_id} in spreadsheet {spreadsheet_id}.")
+
+    # --- SheetsWriter (feature 003) ---------------------------------------------------
+
+    def write_cells(
+        self, spreadsheet_id: str, sheet_id: int, tab_title: str, cells: Sequence[CellWrite]
+    ) -> int:
+        """Store each text verbatim (like RAW) in the tab found by sheet_id; one log entry per call.
+
+        Checks everything before changing anything, so a refused write leaves the grid intact.
+        """
+        self.calls.append(("write_cells", (spreadsheet_id, sheet_id, tab_title, len(cells))))
+        sheet = self._get(spreadsheet_id)
+        if spreadsheet_id in self._read_only:
+            raise SheetReadOnly(self._email)
+        tab = next((t for t in sheet.tabs if t.sheet_id == sheet_id), None)
+        if tab is None:
+            raise SheetNotFound(f"No tab with id {sheet_id} in spreadsheet {spreadsheet_id}.")
+        targets = [(_a1_to_index(c.a1_ref), c.text) for c in cells]
+        for (r, col), text in targets:
+            while len(tab.grid) <= r:
+                tab.grid.append([])
+            row = tab.grid[r]
+            while len(row) <= col:
+                row.append("")
+            row[col] = text
+        self.writes.append((spreadsheet_id, sheet_id, tab_title, tuple(cells)))
+        return len(cells)
+
+    def make_read_only(self, spreadsheet_id: str) -> None:
+        """Simulate a Viewer share: reads work, write_cells raises SheetReadOnly."""
+        self._read_only.add(spreadsheet_id)
+
+    def rename_tab(self, spreadsheet_id: str, sheet_id: int, title: str) -> None:
+        for tab in self._sheets[spreadsheet_id].tabs:
+            if tab.sheet_id == sheet_id:
+                tab.title = title
+                return
+        raise KeyError(sheet_id)
+
+    def delete_tab(self, spreadsheet_id: str, sheet_id: int) -> None:
+        self._sheets[spreadsheet_id].tabs = [
+            t for t in self._sheets[spreadsheet_id].tabs if t.sheet_id != sheet_id
+        ]
 
     # --- Test controls ---------------------------------------------------------------
 
@@ -162,6 +211,20 @@ class FakeSheetsAdapter:
             return self._sheets[spreadsheet_id]
         except KeyError:
             raise SheetNotFound(f"Spreadsheet {spreadsheet_id} not found.") from None
+
+
+_A1 = re.compile(r"^([A-Z]+)([0-9]+)$")
+
+
+def _a1_to_index(a1: str) -> tuple[int, int]:
+    """'B7' -> (6, 1): 0-based (row, column)."""
+    m = _A1.match(a1)
+    if m is None:
+        raise ValueError(f"not an A1 cell reference: {a1!r}")
+    col = 0
+    for ch in m.group(1):
+        col = col * 26 + (ord(ch) - ord("A") + 1)
+    return int(m.group(2)) - 1, col - 1
 
 
 def _tab_from_dict(t: dict) -> _Tab:

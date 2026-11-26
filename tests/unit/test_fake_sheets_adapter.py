@@ -74,3 +74,68 @@ def test_replace_tab_and_call_log(fake_adapter):
     fake_adapter.replace_tab("template_single", 0, [["題號", "作答"], ["1", ""]])
     assert fake_adapter.read_tab("template_single", 0).grid == [["題號", "作答"], ["1", ""]]
     assert fake_adapter.calls[-1] == ("read_tab", ("template_single", 0))
+
+
+# --- Feature 003: the fake also acts as the SheetsWriter (003 research R9, T003) -----------
+
+from quizbuzzer.models import CellWrite  # noqa: E402
+from quizbuzzer.services.sheets_adapter import SheetReadOnly, SheetsWriter  # noqa: E402
+
+
+def _one_tab(fake: FakeSheetsAdapter) -> None:
+    fake.add_spreadsheet(
+        "w", "W", [{"sheetId": 5, "title": "Tab", "index": 0, "grid": [["題號", "作答"], ["1"]]}]
+    )
+
+
+def test_is_a_sheets_writer(fake_adapter):
+    assert isinstance(fake_adapter, SheetsWriter)
+
+
+def test_write_cells_stores_text_verbatim_and_grows_rows():
+    fake = FakeSheetsAdapter(None)
+    _one_tab(fake)
+    n = fake.write_cells("w", 5, "Tab", [CellWrite("B2", "=1+1"), CellWrite("D4", "（2）a,b")])
+    assert n == 2
+    grid = fake.read_tab("w", 5).grid
+    assert grid[1][1] == "=1+1"
+    assert grid[3][3] == "（2）a,b"
+    assert grid[0] == ["題號", "作答"]
+
+
+def test_write_cells_logs_one_entry_per_call():
+    fake = FakeSheetsAdapter(None)
+    _one_tab(fake)
+    cells = [CellWrite("B2", "x"), CellWrite("B3", "y")]
+    fake.write_cells("w", 5, "Tab", cells)
+    assert fake.writes == [("w", 5, "Tab", tuple(cells))]
+
+
+def test_write_cells_unknown_tab_raises_not_found():
+    fake = FakeSheetsAdapter(None)
+    _one_tab(fake)
+    with pytest.raises(SheetNotFound):
+        fake.write_cells("w", 99, "Tab", [CellWrite("A1", "x")])
+
+
+def test_read_only_share_refuses_writes_but_allows_reads():
+    fake = FakeSheetsAdapter(None)
+    _one_tab(fake)
+    fake.make_read_only("w")
+    before = fake.snapshot()
+    with pytest.raises(SheetReadOnly) as info:
+        fake.write_cells("w", 5, "Tab", [CellWrite("B2", "x")])
+    assert info.value.service_account_email == fake.service_account_email
+    assert fake.read_tab("w", 5).grid[0] == ["題號", "作答"]
+    assert fake.snapshot() == before
+    assert fake.writes == []
+
+
+def test_fail_with_also_applies_to_writes():
+    fake = FakeSheetsAdapter(None)
+    _one_tab(fake)
+    fake.fail_with(SheetsUnavailable("down"))
+    with pytest.raises(SheetsUnavailable):
+        fake.write_cells("w", 5, "Tab", [CellWrite("B2", "x")])
+    fake.fail_with(None)
+    assert fake.writes == []

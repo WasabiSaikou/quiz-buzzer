@@ -7,9 +7,10 @@ tests/fakes/fake_sheets_adapter.py: FakeSheetsAdapter.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
-from quizbuzzer.models import SpreadsheetInfo, TabData
+from quizbuzzer.models import CellWrite, SpreadsheetInfo, TabData
 
 
 class SheetsError(Exception):
@@ -47,4 +48,28 @@ class SheetsAdapter(Protocol):
 
     def read_tab(self, spreadsheet_id: str, sheet_id: int) -> TabData:
         """Displayed values and merges of one tab. Unknown sheet_id -> SheetNotFound. Read-only."""
+        ...
+
+
+# --- Feature 003: writing (specs/003-results-export/research.md R1) ----------------------
+# A separate protocol so the import adapter never has a write method (001 FR-005, 003 FR-014).
+
+
+class SheetReadOnly(SheetsError):
+    """The service account can read the sheet but not edit it (Viewer share) (003 FR-013)."""
+
+    def __init__(self, service_account_email: str, message: str | None = None) -> None:
+        self.service_account_email = service_account_email
+        super().__init__(message or "The service account has view-only access to the spreadsheet.")
+
+
+@runtime_checkable
+class SheetsWriter(Protocol):
+    @property
+    def service_account_email(self) -> str: ...
+
+    def write_cells(
+        self, spreadsheet_id: str, sheet_id: int, tab_title: str, cells: Sequence[CellWrite]
+    ) -> int:
+        """Write every cell's text verbatim (RAW) in ONE request; returns the cells written."""
         ...

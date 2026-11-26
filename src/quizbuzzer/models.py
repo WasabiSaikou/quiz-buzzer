@@ -225,3 +225,96 @@ class ImportPreview:
     def can_confirm(self) -> bool:
         """True iff the preview has no error-severity issues."""
         return not self.errors
+
+
+# --- Feature 003 transient types (specs/003-results-export/data-model.md) ----------------
+# Derived on request, never stored (003 research R8).
+
+
+@dataclass(frozen=True)
+class ResultEntry:
+    """One submission in the results (data-model.md › ResultEntry)."""
+
+    rank: int  # >= 1, from submissions.rank
+    group_number: int
+    answers: tuple[tuple[int, str], ...]  # (sub_part, text) in sub-part order; never logged
+    submitted_by: str  # teacher only: student_view strips it (003 FR-003)
+    received_at: str  # teacher only: ISO-8601 UTC ms
+
+    @property
+    def is_winner(self) -> bool:
+        return self.rank == 1
+
+
+@dataclass(frozen=True)
+class UnitResult:
+    """One question unit's outcome (data-model.md › UnitResult)."""
+
+    unit_id: int
+    number: int
+    kind: UnitKind
+    sub_parts: tuple[int, ...]
+    entries: tuple[ResultEntry, ...] = ()  # rank order
+
+    @property
+    def winner(self) -> ResultEntry | None:
+        return self.entries[0] if self.entries and self.entries[0].rank == 1 else None
+
+    @property
+    def no_answer(self) -> bool:
+        """No submission: the UI shows 無人作答."""
+        return not self.entries
+
+
+@dataclass(frozen=True)
+class ActivityResults:
+    """Results of one activity (data-model.md › ActivityResults)."""
+
+    activity_id: int
+    title: str
+    phase: Phase
+    group_count: int
+    units: tuple[UnitResult, ...] = ()  # sheet order (position)
+
+
+@dataclass(frozen=True)
+class PastActivitySummary:
+    """One CLOSED activity in the past list (data-model.md › PastActivitySummary)."""
+
+    activity_id: int
+    title: str
+    created_at: str
+    group_count: int
+    unit_count: int
+    submission_count: int
+
+
+@dataclass(frozen=True)
+class CellWrite:
+    """One cell an export writes (data-model.md › CellWrite)."""
+
+    a1_ref: str  # from the RE-PARSED slot, never the stored AnswerSlot.a1_ref
+    text: str  # sent RAW; never logged
+
+
+ExportProblemKind = Literal["parse_error", "missing_question", "missing_sub_part"]
+
+
+@dataclass(frozen=True)
+class ExportProblem:
+    """Why an export was refused (data-model.md › ExportProblem)."""
+
+    kind: ExportProblemKind
+    message: str
+    question_number: int | None = None
+    sub_part: int | None = None
+    code: str | None = None  # the 001 issue code, for parse_error
+
+
+@dataclass(frozen=True)
+class ExportReport:
+    """Outcome of a successful export (data-model.md › ExportReport)."""
+
+    cells_written: int
+    units_written: int
+    units_skipped: int  # units with no winner
