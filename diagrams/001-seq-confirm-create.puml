@@ -6,44 +6,50 @@ skinparam defaultFontName "Microsoft JhengHei"
 autonumber
 
 actor Teacher
-participant "Teacher UI" as TUI
-participant "API server" as API
-participant "Activity service" as ACT
-participant "Sheets adapter" as SA
-participant "Google Sheets API" as GSA
-database "SQLite store" as DB
+participant "Teacher UI\n(teacher.js)" as TUI
+participant "API server\n(teacher_routes)" as API
+participant "ActivityService" as ACT
+participant "SheetsAdapter" as SA
+participant "guided_notes_parser" as PARSER
+database "SQLite store\n(db.py)" as DB
+participant "RealtimeHub" as RT
 
 Teacher -> TUI : choose group count (2-12),\nacknowledge warnings, confirm
-TUI -> API : create activity (url, tab, groupCount,\npreview fingerprint)
-API -> ACT : createFromImport(...)
+TUI -> API : POST /api/teacher/activities\n{url, sheetId, groupCount,\nfingerprint, acknowledgeWarnings}
+API -> ACT : create_from_import(...)
 alt groupCount outside 2-12
-  ACT --> API : ValidationError
-  API --> TUI : error "group count must be 2-12"
+  ACT --> API : raise InvalidGroupCount
+  API --> TUI : 422 invalid_group_count
 else valid
-  ACT -> SA : readTab + parse (url, tab)
-  SA -> GSA : read cell values (read-only)
-  GSA --> SA : cell grid
-  SA --> ACT : ImportPreview
+  ACT -> SA : read_tab(url, sheet_id)
+  SA --> ACT : TabData(grid, merges)
+  ACT -> PARSER : parse(grid, merges)
+  PARSER --> ACT : ImportPreview
   alt preview has errors
-    ACT --> API : ImportErrors
-    API --> TUI : errors (confirmation blocked)
-  else structure differs from confirmed fingerprint
-    ACT --> API : PreviewChanged(new preview)
-    API --> TUI : show updated preview
-  else matches
-    ACT -> DB : BEGIN
+    ACT --> API : raise ImportHasErrors(preview)
+    API --> TUI : 422 import_errors (confirmation blocked)
+  else fingerprint differs from confirmed one
+    ACT --> API : raise PreviewChanged(preview)
+    API --> TUI : 409 preview_changed + updated preview
+  else warnings present and not acknowledged
+    ACT --> API : raise WarningsNotAcknowledged
+    API --> TUI : 422 warnings_not_acknowledged
+  else ok
+    ACT -> DB : BEGIN IMMEDIATE
     ACT -> DB : any activity with phase DRAFT or OPEN?
     alt a current (non-CLOSED) activity exists
       ACT -> DB : ROLLBACK
-      ACT --> API : Refused(current activity, phase)
-      API --> TUI : error naming current activity;\nsuggest re-import (DRAFT) or close (OPEN)
+      ACT --> API : raise CurrentActivityExists(activity, phase)
+      API --> TUI : 409 current_activity_exists;\nsuggest re-import (DRAFT) or close (OPEN)
     else none
-      ACT -> DB : insert Activity (phase = DRAFT, groupCount, source)
-      ACT -> DB : insert QuestionUnits + AnswerSlots\n(answer cell locations)
+      ACT -> DB : insert activities (phase = DRAFT, group_count, source)
+      ACT -> DB : insert question_units + answer_slots\n(answer cell locations)
       ACT -> DB : COMMIT
       DB --> ACT : ok
-      ACT --> API : activity id
-      API --> TUI : created (DRAFT)
+      ACT -> RT : publish activity.state
+      RT -->> TUI : activity.state (all teacher sockets)
+      ACT --> API : Activity
+      API --> TUI : 201 activity (DRAFT)
       TUI --> Teacher : show DRAFT activity
     end
   end
@@ -54,7 +60,8 @@ note right of DB
   any failure rolls back.
   "At most one non-CLOSED activity"
   is checked inside the same
-  transaction (FR-020a). CLOSED
+  transaction and backed by a partial
+  unique index (FR-020a). CLOSED
   activities are never touched.
 end note
 

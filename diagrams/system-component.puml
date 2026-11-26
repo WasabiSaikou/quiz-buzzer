@@ -9,19 +9,21 @@ actor Teacher
 actor "Student group" as Student
 
 node "Browser" {
-  [Teacher UI] as TUI
-  [Student UI] as SUI
+  [Teacher UI\nstatic/teacher.html + teacher.js] as TUI
+  [Student UI\nstatic/student.html + student.js] as SUI
 }
 
-node "Local server" {
-  [API server] as API
-  [Real-time channel] as RT
-  [Activity service] as ACT
+node "Local server (single process: quizbuzzer.main)" {
+  [API server\napi/teacher_routes.py\napi/ws_routes.py] as API
+  [Real-time channel\nrealtime/hub.py: RealtimeHub] as RT
+  [Activity service\nservices/activity_service.py:\nActivityService] as ACT
+  [Guided Notes parser\nservices/guided_notes_parser.py:\nparse(grid, merges)] as PARSER
   component "Sheets adapter" as SA {
-    [Guided Notes parser] as PARSER
-    [Sheets client] as SCLIENT
+    interface "SheetsAdapter" as SAI
+    [GoogleSheetsAdapter\nservices/google_sheets_adapter.py] as GSAD
+    [sheets_url.py:\nparse_spreadsheet_url] as URL
   }
-  database "SQLite store" as DB
+  database "SQLite store\ndb.py + quizbuzzer.db" as DB
 }
 
 cloud "Google" {
@@ -31,24 +33,25 @@ cloud "Google" {
 Teacher --> TUI
 Student --> SUI
 
-TUI --> API : HTTP (import, preview,\nconfirm, phase changes)
-SUI --> API : HTTP (join, submit)
-RT ..> TUI : push phase / state
-RT ..> SUI : push phase / own group state
+TUI --> API : HTTP /api/teacher/*
+SUI --> API : HTTP (join, submit;\nlater feature)
+RT ..> TUI : WebSocket push\n(activity state)
+RT ..> SUI : WebSocket push\n(phase / own group state;\nlater feature)
 
-API --> ACT : commands
-API --> SA : preview requests
-ACT --> SA : re-read on confirm
+API --> ACT : all commands and queries
+ACT --> SAI : list_tabs / read_tab
+ACT --> PARSER : parse(grid, merges)
 ACT --> DB : atomic transactions
-ACT --> RT : publish events
-SA --> GSA : read (import)\nwrite (export, later feature)
-PARSER ..> SCLIENT : uses cell grid
+ACT --> RT : publish activity state
+GSAD ..|> SAI
+GSAD --> URL
+GSAD --> GSA : spreadsheets.get, values.get (import)\nvalues.batchUpdate RAW (export, 003)
 
 note right of PARSER
+  Pure function: no network, no DB.
   Locates header (題號 / 作答),
   numbered rows and （k） markers.
-  No hardcoded addresses
-  (Constitution II).
+  No hardcoded addresses (Constitution II).
 end note
 
 note bottom of ACT
@@ -58,8 +61,11 @@ note bottom of ACT
 end note
 
 note right of SUI
-  Student UI and Real-time channel
-  are specified by later features.
+  Student UI, student WebSocket and
+  submissions are specified by later
+  features. Tests replace
+  GoogleSheetsAdapter with
+  FakeSheetsAdapter (tests/fakes/).
 end note
 
 note left of API

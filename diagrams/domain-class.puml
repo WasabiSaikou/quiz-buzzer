@@ -1,5 +1,5 @@
 @startuml domain-class
-title Quiz Buzzer (課堂搶答系統) - Domain Classes
+title Quiz Buzzer (課堂搶答系統) - Domain Classes (models.py)
 
 skinparam shadowing false
 skinparam defaultFontName "Microsoft JhengHei"
@@ -17,51 +17,51 @@ enum UnitKind {
 }
 
 class Activity {
-  id : Id
-  title : String
+  id : int
+  title : str
   phase : Phase
-  groupCount : Integer {2..12}
-  sourceSpreadsheetId : String
-  sourceTabTitle : String
-  createdAt : DateTime
-  importedAt : DateTime
+  groupCount : int {2..12}
+  sourceSpreadsheetId : str
+  sourceSheetId : int
+  sourceTabTitle : str
+  createdAt : datetime
+  importedAt : datetime
 }
 
 class QuestionUnit {
-  id : Id
-  number : Integer {>0}
+  id : int
+  number : int {>0}
   kind : UnitKind
-  sourceRow : Integer
-  position : Integer
+  sourceRow : int
+  position : int
 }
 
 class AnswerSlot {
-  id : Id
-  subPart : Integer {>0}
-  tabTitle : String
-  cellRow : Integer
-  cellColumn : Integer
-  a1Ref : String
+  id : int
+  subPart : int {>0}
+  cellRow : int
+  cellColumn : int
+  a1Ref : str
 }
 
 class Group {
-  id : Id
-  number : Integer {1..groupCount}
-  name : String
+  id : int
+  number : int {1..groupCount}
+  name : str
 }
 
 class Participant {
-  id : Id
-  displayName : String
-  joinedAt : DateTime
+  id : int
+  displayName : str
+  joinedAt : datetime
 }
 
 class Submission {
-  id : Id
-  arrivalSeq : Integer
-  receivedAt : DateTime
-  answers : Map<AnswerSlot, String>
-  isWinner : Boolean
+  id : int
+  arrivalSeq : int
+  receivedAt : datetime
+  answers : Map<AnswerSlot, str>
+  isWinner : bool
 }
 
 Activity "1" *-- "1..*" QuestionUnit : questions >
@@ -73,10 +73,19 @@ Group "1" -- "0..*" Submission : submits >
 Activity --> Phase
 QuestionUnit --> UnitKind
 
+note right of Activity
+  At most one Activity is non-CLOSED
+  (DRAFT or OPEN) at a time.
+  CLOSED activities are kept, with
+  results / CSV viewable.
+  Slots live on the activity's source
+  tab (sourceSheetId / sourceTabTitle).
+end note
+
 note right of AnswerSlot
-  Cell location computed at import
-  time from sheet structure and
-  stored for later export.
+  Cell location (1-based row/column)
+  computed at import time from sheet
+  structure and stored for export.
   Feature 003 overwrites the whole cell:
   SINGLE -> "answer"; every 題組 slot ->
   "（k）answer" (k = subPart), including
@@ -85,17 +94,11 @@ end note
 
 note bottom of Submission
   arrivalSeq and receivedAt are assigned by
-  the server inside one atomic transaction;
+  the server inside one atomic transaction
+  (BEGIN IMMEDIATE, UNIQUE(group_id, unit_id));
   at most one isWinner per QuestionUnit (I).
   Group, Participant and Submission are
   specified by later features.
-end note
-
-note right of Activity
-  At most one Activity is non-CLOSED
-  (DRAFT or OPEN) at a time.
-  CLOSED activities are kept, with
-  results / CSV viewable.
 end note
 
 note left of QuestionUnit

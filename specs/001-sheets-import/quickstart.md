@@ -1,0 +1,83 @@
+# Quickstart: Import Guided Notes Worksheet (001) — Windows
+
+Run and validation guide. Endpoint and payload details live in [contracts/](contracts/), and
+tables in [data-model.md](data-model.md).
+
+## Prerequisites
+
+- Windows 10/11, PowerShell.
+- `uv` (0.13 or later) on PATH.
+- Java 21 or later, used only for diagrams (`tools/plantuml.jar`).
+- A Google Cloud service account with the Sheets API enabled, and its JSON key saved under
+  `quiz-buzzer\secrets\` (gitignored). The key is never committed or pasted anywhere
+  (Principle VI).
+
+## 1. Environment (outer-folder venv, uv-managed)
+
+The project venv is `SWE-Voting-System\.venv` (one level above `quiz-buzzer`). It must be a uv
+CPython venv; see [research.md R1](research.md#r1-python-environment-and-uv--needs-team-action).
+
+```powershell
+cd C:\path\to\SWE-Voting-System\quiz-buzzer
+$env:UV_PROJECT_ENVIRONMENT = "..\.venv"   # or set once as a user environment variable
+uv sync                                     # installs runtime + dev deps from uv.lock
+```
+
+## 2. Configuration
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Edit `.env`. The variable names are in `.env.example`, and real values go only in `.env`:
+
+| Variable | Meaning |
+|---|---|
+| `GOOGLE_APPLICATION_CREDENTIALS` | path to the service-account JSON key, e.g. `secrets/<key-file>.json` |
+| `QUIZBUZZER_DB_PATH` | SQLite file, default `data/quizbuzzer.db` |
+| `QUIZBUZZER_HOST` / `QUIZBUZZER_PORT` | bind address (LAN IP or `0.0.0.0` for the classroom; default `127.0.0.1`) / port (default `8000`) |
+
+## 3. Run
+
+```powershell
+uv run uvicorn quizbuzzer.main:app --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/teacher`.
+
+## 4. Automated tests (no Google access needed)
+
+```powershell
+uv run pytest                          # everything
+uv run pytest tests/unit -q            # parser, URL parsing, fingerprint, service rules
+uv run pytest tests/integration -q     # REST + WebSocket through TestClient with FakeSheetsAdapter
+```
+
+Expected: all pass. The parser suite runs against at least three fixture sheets in
+`tests/fixtures/sheets/` (Principle II).
+
+## 5. Diagrams (Principle VIII)
+
+```powershell
+java -jar tools/plantuml.jar "./diagrams/*.puml"
+```
+
+Expected: exit code 0, with a fresh `.png` next to every `.puml`.
+
+## 6. Manual validation scenarios
+
+Record each run in `specs/001-sheets-import/verification.md` with the date, tester, steps and
+observed result (Principle V).
+
+| # | Steps | Expected |
+|---|---|---|
+| M1 | Paste a link to a sheet **not** shared with the service account | Error shows the service account email and says to share as Viewer |
+| M2 | Paste `https://example.com/x` | "Not a Google Sheets link"; no Google request in server log |
+| M3 | Share a course template, paste its link | First tab preselected; preview lists every question with type, sub-part count, answer cell |
+| M4 | Paste the same link with `#gid=` of the second tab | Second tab preselected |
+| M5 | Add `備註` in the 題號 column, re-preview | Warning naming the row and `備註` |
+| M6 | Confirm with 6 groups (acknowledging warnings) | DRAFT activity shown with 6 groups and the same slots; a second open `/teacher` tab updates without reload |
+| M7 | Try to create another activity | Refused: names the current DRAFT activity, suggests re-import |
+| M8 | Edit the sheet (add a question), re-import, confirm | Activity now has the new question set; phase and group count unchanged |
+| M9 | Preview, then edit the sheet structure, then confirm | Refused with updated preview |
+| M10 | Open the sheet's version history after M3–M9 | No edits by the service account (FR-005, SC-005) |

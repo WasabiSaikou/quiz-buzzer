@@ -317,7 +317,7 @@ setup) and verify re-import is refused.
   the sheet row it was found on, and one or more answer slots. Later features award exactly one
   winner per question unit.
 - **AnswerSlot**: one place an answer goes. Has its sub-part number (1 for a single question) and
-  the answer cell location (tab and cell) computed at import.
+  the answer cell location computed at import; the cell is on the activity's source tab.
 - **Import preview** (transient, not stored): the detection result for one tab — questions,
   slots, errors and warnings — shown to the teacher before confirmation.
 - **Group, Participant, Submission**: part of the overall model, defined by later features; not

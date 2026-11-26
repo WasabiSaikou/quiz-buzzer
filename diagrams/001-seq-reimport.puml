@@ -6,50 +6,55 @@ skinparam defaultFontName "Microsoft JhengHei"
 autonumber
 
 actor Teacher
-participant "Teacher UI" as TUI
-participant "API server" as API
-participant "Activity service" as ACT
-participant "Sheets adapter" as SA
-participant "Google Sheets API" as GSA
-database "SQLite store" as DB
+participant "Teacher UI\n(teacher.js)" as TUI
+participant "API server\n(teacher_routes)" as API
+participant "ActivityService" as ACT
+participant "SheetsAdapter" as SA
+participant "guided_notes_parser" as PARSER
+database "SQLite store\n(db.py)" as DB
+participant "RealtimeHub" as RT
 
 Teacher -> TUI : re-import (url, tab)
-TUI -> API : request re-import preview (activityId, url, tab)
-API -> ACT : checkReimportAllowed(activityId)
+TUI -> API : POST /api/teacher/activities/{id}/reimport/preview\n{url, sheetId}
+API -> ACT : preview_reimport(activity_id, url, sheet_id)
+ACT -> ACT : check_reimport_allowed(activity_id)
 ACT -> DB : read activity phase
 alt phase is OPEN or CLOSED
-  ACT --> API : Refused(phase)
-  API --> TUI : error "activity is <phase>; re-import not allowed"
+  ACT --> API : raise ReimportRefused(phase)
+  API --> TUI : 409 reimport_refused\n"activity is <phase>"
 else phase is DRAFT
-  API -> SA : readTab + parse (url, tab)
-  SA -> GSA : read cell values (read-only)
-  GSA --> SA : cell grid
-  SA --> API : ImportPreview
-  API --> TUI : preview (errors / warnings)
+  ACT -> SA : read_tab(url, sheet_id)
+  SA --> ACT : TabData(grid, merges)
+  ACT -> PARSER : parse(grid, merges)
+  PARSER --> ACT : ImportPreview
+  ACT --> API : ImportPreview
+  API --> TUI : 200 preview (errors / warnings)
   Teacher -> TUI : confirm replacement
-  TUI -> API : confirm re-import (activityId, url, tab,\npreview fingerprint)
-  API -> ACT : replaceQuestions(...)
-  ACT -> SA : readTab + parse (url, tab)
-  SA -> GSA : read cell values (read-only)
-  GSA --> SA : cell grid
-  SA --> ACT : ImportPreview
-  alt errors, or structure differs from fingerprint
-    ACT --> API : ImportErrors / PreviewChanged
-    API --> TUI : errors or updated preview
+  TUI -> API : PUT /api/teacher/activities/{id}/questions\n{url, sheetId, fingerprint, acknowledgeWarnings}
+  API -> ACT : replace_questions(...)
+  ACT -> SA : read_tab(url, sheet_id)
+  SA --> ACT : TabData(grid, merges)
+  ACT -> PARSER : parse(grid, merges)
+  PARSER --> ACT : ImportPreview
+  alt errors / fingerprint differs / warnings not acknowledged
+    ACT --> API : raise ImportHasErrors /\nPreviewChanged / WarningsNotAcknowledged
+    API --> TUI : 422 / 409 / 422
   else ok
-    ACT -> DB : BEGIN
+    ACT -> DB : BEGIN IMMEDIATE
     ACT -> DB : re-check phase = DRAFT
     alt phase changed to OPEN or CLOSED
       ACT -> DB : ROLLBACK
-      ACT --> API : Refused(phase)
-      API --> TUI : error, questions unchanged
+      ACT --> API : raise ReimportRefused(phase)
+      API --> TUI : 409 reimport_refused, questions unchanged
     else still DRAFT
-      ACT -> DB : delete old QuestionUnits + AnswerSlots
-      ACT -> DB : insert new QuestionUnits + AnswerSlots
-      ACT -> DB : update source spreadsheet / tab, importedAt
+      ACT -> DB : delete old question_units\n(answer_slots cascade)
+      ACT -> DB : insert new question_units + answer_slots
+      ACT -> DB : update source spreadsheet / tab, imported_at
       ACT -> DB : COMMIT
-      ACT --> API : replaced
-      API --> TUI : updated DRAFT activity\n(phase + groupCount unchanged)
+      ACT -> RT : publish activity.state
+      RT -->> TUI : activity.state (all teacher sockets)
+      ACT --> API : Activity
+      API --> TUI : 200 updated DRAFT activity\n(phase + groupCount unchanged)
     end
   end
 end

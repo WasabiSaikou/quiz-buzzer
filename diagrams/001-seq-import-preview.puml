@@ -6,51 +6,63 @@ skinparam defaultFontName "Microsoft JhengHei"
 autonumber
 
 actor Teacher
-participant "Teacher UI" as TUI
-participant "API server" as API
-participant "Sheets adapter" as SA
-participant "Guided Notes parser" as PARSER
+participant "Teacher UI\n(teacher.js)" as TUI
+participant "API server\n(teacher_routes)" as API
+participant "ActivityService" as ACT
+participant "SheetsAdapter\n(GoogleSheetsAdapter)" as SA
+participant "guided_notes_parser" as PARSER
 participant "Google Sheets API" as GSA
 
 Teacher -> TUI : paste spreadsheet URL
-TUI -> API : request tab list (url)
-API -> SA : listTabs(url)
+TUI -> API : POST /api/teacher/import/tabs {url}
+API -> ACT : list_tabs(url)
+ACT -> SA : list_tabs(url)
 alt URL is not a Google Sheets spreadsheet link
-  SA --> API : InvalidUrl
-  API --> TUI : error "not a Google Sheets link"
+  SA --> ACT : raise InvalidSheetUrl
+  ACT --> API : InvalidSheetUrl
+  API --> TUI : 400 invalid_url
 else valid URL
-  SA -> GSA : read spreadsheet metadata (read-only)
+  SA -> GSA : spreadsheets.get (title, tab properties; read-only)
   alt not shared with service account
-    GSA --> SA : permission denied
-    SA --> API : NotShared(serviceAccountEmail)
-    API --> TUI : error + "share with <service account email>"
+    GSA --> SA : 403
+    SA --> ACT : raise SheetNotShared(service_account_email)
+    ACT --> API : SheetNotShared
+    API --> TUI : 403 not_shared + service account email
   else spreadsheet not found
-    GSA --> SA : not found
-    SA --> API : NotFound
-    API --> TUI : error "spreadsheet not found"
+    GSA --> SA : 404
+    SA --> ACT : raise SheetNotFound
+    ACT --> API : SheetNotFound
+    API --> TUI : 404 not_found
+  else Google unreachable / timeout
+    SA --> ACT : raise SheetsUnavailable
+    ACT --> API : SheetsUnavailable
+    API --> TUI : 502 sheets_unavailable
   else readable
     GSA --> SA : title, tabs
-    SA --> API : tabs
-    API --> TUI : tabs; preselect tab matching #gid=\n(else first tab)
+    SA --> ACT : SpreadsheetInfo
+    ACT --> API : SpreadsheetInfo +\npreselected sheet (#gid= match, else first)
+    API --> TUI : 200 tabs + preselectedSheetId
   end
 end
 
 Teacher -> TUI : keep preselected tab or select another
-TUI -> API : request preview (url, tab)
-API -> SA : readTab(url, tab)
-SA -> GSA : read cell values + merged ranges (read-only)
-GSA --> SA : cell grid
-SA -> PARSER : parse(grid)
-PARSER -> PARSER : find header row (題號 / 作答)
+TUI -> API : POST /api/teacher/import/preview {url, sheetId}
+API -> ACT : preview_import(url, sheet_id)
+ACT -> SA : read_tab(url, sheet_id)
+SA -> GSA : values.get FORMATTED_VALUE\n+ spreadsheets.get merges (read-only)
+GSA --> SA : cell values, merges
+SA --> ACT : TabData(grid, merges)
+ACT -> PARSER : parse(grid, merges)
+PARSER -> PARSER : find header row (題號 / 作答;\nwhitespace ignored)
 PARSER -> PARSER : scan rows below header:\nnumbered rows (n, n., n、, Qn, qn;\nhalf/full-width digits),\n（k）/(k) markers, skip blank rows
 PARSER -> PARSER : unrecognised 題號 cell ->\nwarning (row + content)
 PARSER -> PARSER : unnumbered row with non-marker\nanswer text -> no slot, warning\n(cell + text)
 PARSER -> PARSER : any slot cell with text beyond\nits own marker -> warning\n(cell + text; export will replace it)
-PARSER -> PARSER : classify SINGLE / 題組,\ncompute answer cell per slot
-PARSER -> PARSER : collect errors and warnings\n(row / cell + remedy)
-PARSER --> SA : ImportPreview
-SA --> API : ImportPreview
-API --> TUI : questions, slots, answer cells,\nerrors, warnings, totals
+PARSER -> PARSER : classify SINGLE / GROUP_SET (題組),\ncompute answer cell per slot
+PARSER -> PARSER : collect errors and warnings\n(row / cell + remedy), fingerprint
+PARSER --> ACT : ImportPreview
+ACT --> API : ImportPreview
+API --> TUI : 200 units, slots, issues,\ntotals, fingerprint, canConfirm
 TUI --> Teacher : show preview\n(confirm disabled if errors)
 
 note over SA, GSA
