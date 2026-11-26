@@ -68,7 +68,7 @@ implementation task it covers. Record the red run in `docs/verification.md` › 
 
 ### Tests for Foundational (write first, observe failing) ⚠️
 
-- [ ] T005 [P] Write `tests/unit/test_results_service.py`:
+- [X] T005 [P] Write `tests/unit/test_results_service.py`:
   - `build_results(activity, submissions)`: units in `position` order; entries in rank order; `winner` is the rank-1 entry; a unit with no submission has `no_answer` true and `winner` None; answers in sub-part order; `submitted_by` / `received_at` carried (data-model.md › ResultEntry.submitted_by, ResultEntry.received_at).
   - `ResultsService.teacher_results(id)`: unknown id → `ActivityNotFound`; DRAFT / OPEN → `PhaseConflict` with `action == "results"` and the contract message; CLOSED → `ActivityResults` matching the DB (use `tests/live_helpers.make_activity` and real submits through `ParticipationService`).
   - `results_out(results)` produces the contract's `TeacherResults` JSON shape exactly.
@@ -76,8 +76,8 @@ implementation task it covers. Record the red run in `docs/verification.md` › 
 
 ### Implementation for Foundational
 
-- [ ] T006 Add messages for `action in {"results", "export", "csv"}` to `PhaseConflict` in `src/quizbuzzer/services/activity_service.py` (contracts › common refusals). Existing open / end messages unchanged.
-- [ ] T007 Create `src/quizbuzzer/services/results_service.py`: pure `build_results`, `results_out`, and `ResultsService(db_path)` with `teacher_results(activity_id)` and `results_for(activity)` (no phase check; reads `db.list_dashboard_submissions`). Orders per data-model.md › ActivityResults.units (sheet order) and UnitResult.entries (rank order); sets data-model.md › ResultEntry.is_winner, UnitResult.winner, UnitResult.no_answer. Make T005 pass.
+- [X] T006 Add messages for `action in {"results", "export", "csv"}` to `PhaseConflict` in `src/quizbuzzer/services/activity_service.py` (contracts › common refusals). Existing open / end messages unchanged.
+- [X] T007 Create `src/quizbuzzer/services/results_service.py`: pure `build_results`, `results_out`, and `ResultsService(db_path)` with `teacher_results(activity_id)` and `results_for(activity)` (no phase check; reads `db.list_dashboard_submissions`). Orders per data-model.md › ActivityResults.units (sheet order) and UnitResult.entries (rank order); sets data-model.md › ResultEntry.is_winner, UnitResult.winner, UnitResult.no_answer. Make T005 pass.
 
 **Checkpoint**: `uv run pytest` green; commit.
 

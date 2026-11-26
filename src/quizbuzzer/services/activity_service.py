@@ -120,6 +120,17 @@ class PhaseConflict(Exception):
             message = "A DRAFT activity cannot be ended. Use Cancel activity instead."
         elif action == "open" and phase is Phase.CLOSED:
             message = "The activity is CLOSED; a closed activity cannot be opened again."
+        # 003 (contracts/rest-api.md › common refusals): results, export, CSV need CLOSED.
+        elif action == "results":
+            message = f"Results are available once the activity is CLOSED; it is {phase.value}."
+        elif action == "export":
+            message = (
+                f"The results cannot be exported until the activity is CLOSED; it is {phase.value}."
+            )
+        elif action == "csv":
+            message = (
+                f"The results cannot be downloaded until the activity is CLOSED; it is {phase.value}."
+            )
         else:
             message = f"The activity is already {phase.value}."
         super().__init__(message)

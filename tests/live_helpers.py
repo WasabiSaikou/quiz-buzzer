@@ -179,3 +179,47 @@ def set_db_phase(db_path, activity_id: int, phase: str) -> None:
 def answers_for(unit, texts=None) -> list[dict]:
     texts = texts or [f"ans-{unit.number}-{s.sub_part}" for s in unit.slots]
     return [{"subPart": s.sub_part, "text": t} for s, t in zip(unit.slots, texts, strict=True)]
+
+
+# --- Feature 003 helpers ----------------------------------------------------------------
+
+
+def run_activity(
+    fake_adapter,
+    db_path,
+    plays,
+    *,
+    n_units: int = 4,
+    group_count: int = 6,
+    final_phase: str = "CLOSED",
+):
+    """Create the live-sheet activity, join one member per group, submit `plays`, set the phase.
+
+    `plays` is a sequence of (unit_number, group_number) or (unit_number, group_number, texts),
+    submitted in that order through ParticipationService (real ranks). Returns
+    (activity, participation_service, tokens_by_group).
+    """
+    from quizbuzzer.services.participation_service import ParticipationService
+
+    init_schema(db_path)
+    part = ParticipationService(db_path)
+    activity = make_activity(
+        fake_adapter, db_path, n_units=n_units, group_count=group_count, phase="DRAFT"
+    )
+    tokens: dict[int, str] = {}
+    for play in plays:
+        g = play[1]
+        if g not in tokens:
+            tokens[g], _ = part.join(None, activity.id, g, f"名{g}")
+    set_db_phase(db_path, activity.id, "OPEN")
+    for play in plays:
+        number, g = play[0], play[1]
+        texts = play[2] if len(play) > 2 else None
+        unit = next(u for u in activity.units if u.number == number)
+        part.submit(tokens[g], unit.id, answers_for(unit, texts))
+    if final_phase != "OPEN":
+        set_db_phase(db_path, activity.id, final_phase)
+    from quizbuzzer.services.activity_service import ActivityService
+
+    activity = ActivityService(fake_adapter, db_path).get_activity(activity.id)  # current phase
+    return activity, part, tokens

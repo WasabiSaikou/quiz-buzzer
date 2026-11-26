@@ -167,3 +167,4 @@ Each core-rule test was written first, run, and **observed failing** before its 
 | Phase | Tests written first | Red run (summary) | Green run | Commit |
 |---|---|---|---|---|
 | 1 · Setup: fake SheetsWriter | `unit/test_fake_sheets_adapter.py` (003 part, T003) | 6 failed (`write_cells`, `writes`, `make_read_only` missing), 11 passed (pre-existing) | 416 passed (full suite) | Setup commit |
+| 2 · Foundational: results model, CLOSED-only teacher refusal | `unit/test_results_service.py` (T005) | 1 collection error (`services.results_service` missing); after the module existed, 4 failures were test-setup bugs (missing `init_schema`, helper returned the pre-close activity), fixed in the test helper, not in the code under test | 427 passed (full suite) | Foundational commit |
