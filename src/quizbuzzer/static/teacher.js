@@ -9,6 +9,9 @@ const state = {
   preview: null,
   current: null, // full Activity of the current (DRAFT/OPEN) activity, or null
   mode: "create", // "create" a new activity, or "reimport" into state.current (US3)
+  dashboard: null, // latest dashboard.state for state.current (002)
+  importAfterClose: false, // teacher chose "Import a new worksheet" under a CLOSED activity
+  socket: null,
 };
 
 // --- HTTP ------------------------------------------------------------------------------
@@ -28,10 +31,40 @@ async function api(method, path, body) {
     headers: body ? { "Content-Type": "application/json" } : {},
     body: body ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error);
+  if (!res.ok) {
+    const err = new ApiError(res.status, data.error);
+    if (err.code === "teacher_required") showLock(); // 002 FR-001: unlock first
+    throw err;
+  }
   return data;
 }
+
+// --- Passcode lock (002 FR-001 – FR-003) ------------------------------------------------
+
+function showLock(message = null) {
+  $("lock-section").classList.remove("hidden");
+  for (const id of ["import-section", "preview-section", "current-section", "dashboard-section"]) {
+    $(id).classList.add("hidden");
+  }
+  if (message) showMessage($("lock-message"), message);
+  $("passcode").focus();
+}
+
+$("lock-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  hideMessage($("lock-message"));
+  try {
+    await api("POST", "/api/teacher/session", { passcode: $("passcode").value });
+    $("passcode").value = ""; // never kept in the page (FR-004)
+    $("lock-section").classList.add("hidden");
+    $("import-section").classList.remove("hidden");
+    reconnectLive();
+  } catch (err) {
+    showMessage($("lock-message"), err.message);
+  }
+});
 
 // --- Rendering helpers ------------------------------------------------------------------
 
@@ -229,17 +262,28 @@ async function confirmCreate() {
 // --- Current activity (driven by /ws/teacher) ----------------------------------------------
 
 function showCurrent(activity) {
+  if (!activity || !state.current || activity.id !== state.current.id) {
+    state.dashboard = null;
+    state.importAfterClose = false;
+  }
   state.current = activity;
   const hasCurrent = Boolean(activity);
   if (state.mode === "reimport" && (!hasCurrent || activity.phase !== "DRAFT")) {
     exitReimport(hasCurrent ? `Re-import cancelled: the activity is now ${activity.phase}.` : null);
   }
   const reimporting = state.mode === "reimport";
+  const closed = hasCurrent && activity.phase === "CLOSED";
+  const importing = !hasCurrent || reimporting || (closed && state.importAfterClose);
   $("current-section").classList.toggle("hidden", !hasCurrent || reimporting);
-  $("import-section").classList.toggle("hidden", hasCurrent && !reimporting);
-  if (hasCurrent && !reimporting) $("preview-section").classList.add("hidden");
+  $("import-section").classList.toggle("hidden", !importing);
+  if (!importing) $("preview-section").classList.add("hidden");
+  renderDashboard();
   if (!hasCurrent) return;
   $("reimport-button").classList.toggle("hidden", activity.phase !== "DRAFT");
+  $("open-button").classList.toggle("hidden", activity.phase !== "DRAFT");
+  $("cancel-button").classList.toggle("hidden", activity.phase !== "DRAFT");
+  $("end-button").classList.toggle("hidden", activity.phase !== "OPEN");
+  $("new-import-button").classList.toggle("hidden", !closed || state.importAfterClose);
   $("current-title").textContent = activity.title;
   const phase = $("current-phase");
   phase.textContent = activity.phase;
@@ -248,6 +292,82 @@ function showCurrent(activity) {
     `${activity.groupCount} groups · ${activity.totals.units} questions · ${activity.totals.slots} answer slots · imported ${activity.importedAt}`;
   $("current-units").replaceChildren(...unitRows(activity.units, activity.source.tabTitle));
 }
+
+// --- Live dashboard (002 FR-026 – FR-029) ------------------------------------------------
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString(undefined, { hour12: false }) + "." + String(d.getMilliseconds()).padStart(3, "0");
+}
+
+function renderDashboard() {
+  const d = state.dashboard;
+  // Shown in every phase: in DRAFT it lists the groups' members as students join (FR-028).
+  const visible = Boolean(d && state.current && d.activityId === state.current.id);
+  $("dashboard-section").classList.toggle("hidden", !visible);
+  if (!visible) return;
+  $("dashboard-title").textContent = d.phase === "CLOSED" ? "Final results (activity closed)" : "Live dashboard";
+  $("dashboard-groups").replaceChildren(
+    ...d.groups.map((g) =>
+      el("div", {}, el("strong", {}, `Group ${g.number}`), ` (${g.memberCount})`, el("div", { class: "muted" }, g.members.join("、") || "—")),
+    ),
+  );
+  $("dashboard-units").replaceChildren(
+    ...d.units.map((u) => {
+      const head = el("h3", {}, `Question ${u.number}`, " ", kindLabel(u.kind));
+      if (u.submissions.length === 0) return el("div", { class: "dash-unit" }, head, el("p", { class: "muted" }, "No submissions yet"));
+      const rows = u.submissions.map((s) =>
+        el(
+          "tr",
+          {},
+          el("td", {}, s.isWinner ? el("span", { class: "tag winner" }, `#${s.rank} winner`) : `#${s.rank}`),
+          el("td", {}, `Group ${s.groupNumber}`),
+          el("td", {}, s.submittedBy),
+          el("td", {}, s.answers.map((a) => (u.kind === "GROUP_SET" ? `（${a.subPart}）` : "") + a.text).join("  ")),
+          el("td", {}, formatTime(s.receivedAt)),
+        ),
+      );
+      return el(
+        "div",
+        { class: "dash-unit" },
+        head,
+        el("table", {}, el("thead", {}, el("tr", {}, ...["Rank", "Group", "Submitted by", "Answer", "Received"].map((h) => el("th", {}, h)))), el("tbody", {}, ...rows)),
+      );
+    }),
+  );
+}
+
+async function phaseAction(button, method, path, question) {
+  if (!window.confirm(question)) return; // FR-007: these actions cannot be undone
+  hideMessage($("current-message"));
+  button.disabled = true;
+  try {
+    const activity = await api(method, path);
+    if (activity) showCurrent(activity); // pushes will follow; the server stays authoritative
+  } catch (err) {
+    showApiError($("current-message"), err);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$("open-button").addEventListener("click", (ev) =>
+  phaseAction(ev.target, "POST", `/api/teacher/activities/${state.current.id}/open`,
+    `Open "${state.current.title}" for students now? This cannot be undone: questions can no longer be re-imported.`),
+);
+$("end-button").addEventListener("click", (ev) =>
+  phaseAction(ev.target, "POST", `/api/teacher/activities/${state.current.id}/end`,
+    `End "${state.current.title}" now? This cannot be undone: no more answers will be accepted.`),
+);
+$("cancel-button").addEventListener("click", (ev) =>
+  phaseAction(ev.target, "DELETE", `/api/teacher/activities/${state.current.id}`,
+    `Cancel "${state.current.title}"? It is deleted with its questions, groups and student memberships. This cannot be undone.`),
+);
+$("new-import-button").addEventListener("click", () => {
+  state.importAfterClose = true;
+  showCurrent(state.current);
+});
 
 function enterReimport() {
   state.mode = "reimport";
@@ -288,7 +408,11 @@ async function onActivityState(summary) {
     return;
   }
   try {
-    showCurrent(await api("GET", `/api/teacher/activities/${summary.id}`));
+    const activity = await api("GET", `/api/teacher/activities/${summary.id}`);
+    showCurrent(activity);
+    if (!state.dashboard || state.dashboard.activityId !== activity.id) {
+      api("GET", `/api/teacher/activities/${activity.id}/dashboard`).then(onDashboardState, () => {});
+    }
   } catch (err) {
     showApiError($("current-message"), err);
   }
@@ -309,11 +433,33 @@ function connectLive(delay = 500) {
       return;
     }
     if (msg.type === "activity.state") onActivityState(msg.activity);
+    else if (msg.type === "dashboard.state") onDashboardState(msg.dashboard);
   });
-  ws.addEventListener("close", () => {
+  ws.addEventListener("close", (ev) => {
+    if (state.socket !== ws) return; // replaced on purpose
+    if (ev.code === 4401) {
+      // Not unlocked (or the server restarted): wait for the passcode (002 FR-003).
+      $("live-status").textContent = "Locked.";
+      state.socket = null;
+      showLock();
+      return;
+    }
     $("live-status").textContent = "Live updates disconnected — reconnecting…";
     setTimeout(() => connectLive(Math.min(delay * 2, 10000)), delay);
   });
+  state.socket = ws;
+}
+
+function reconnectLive() {
+  const old = state.socket;
+  state.socket = null;
+  if (old) old.close();
+  connectLive();
+}
+
+function onDashboardState(dashboard) {
+  state.dashboard = dashboard;
+  renderDashboard();
 }
 
 // --- Wiring -----------------------------------------------------------------------------

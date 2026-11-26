@@ -244,6 +244,11 @@ def list_closed_activity_ids(conn: sqlite3.Connection) -> list[int]:
     return [r[0] for r in conn.execute("SELECT id FROM activities WHERE phase = 'CLOSED' ORDER BY id")]
 
 
+def set_phase(conn: sqlite3.Connection, activity_id: int, phase: Phase) -> None:
+    """Change the phase; the caller checks the transition inside its transaction (FR-006)."""
+    conn.execute("UPDATE activities SET phase = ? WHERE id = ?", (phase.value, activity_id))
+
+
 def find_latest_activity(conn: sqlite3.Connection) -> sqlite3.Row | None:
     """The most recently CLOSED activity (002 research R7).
 
@@ -354,6 +359,22 @@ def list_group_submissions(
     return _submissions(
         conn, "u.activity_id = ? AND s.group_number = ?", (activity_id, group_number)
     )
+
+
+def list_dashboard_submissions(conn: sqlite3.Connection, activity_id: int) -> list[Submission]:
+    """Every submission of the activity, units in sheet order, each unit in rank order."""
+    return _submissions(conn, "u.activity_id = ?", (activity_id,))
+
+
+def list_members_by_group(conn: sqlite3.Connection, activity_id: int) -> dict[int, list[str]]:
+    """group_number -> display names in join order (duplicates kept)."""
+    members: dict[int, list[str]] = {}
+    for r in conn.execute(
+        "SELECT group_number, display_name FROM participants WHERE activity_id = ? ORDER BY id",
+        (activity_id,),
+    ):
+        members.setdefault(r["group_number"], []).append(r["display_name"])
+    return members
 
 
 @contextmanager

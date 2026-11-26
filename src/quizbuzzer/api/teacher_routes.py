@@ -61,6 +61,12 @@ def get_activity(activity_id: int, request: Request) -> ActivityResponse:
     return ActivityResponse.from_activity(_service(request).get_activity(activity_id))
 
 
+@router.post("/activities/{activity_id}/open", response_model=ActivityResponse)
+def open_activity(activity_id: int, request: Request) -> ActivityResponse:
+    """002 FR-005: DRAFT -> OPEN (diagrams/002-seq-open-activity.puml)."""
+    return ActivityResponse.from_activity(_service(request).open_activity(activity_id))
+
+
 @router.post("/activities/{activity_id}/reimport/preview", response_model=PreviewResponse)
 def reimport_preview(activity_id: int, body: PreviewRequest, request: Request) -> PreviewResponse:
     preview = _service(request).preview_reimport(activity_id, body.url, body.sheet_id)

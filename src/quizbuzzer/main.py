@@ -31,6 +31,7 @@ from quizbuzzer.services.activity_service import (
     ImportHasErrors,
     InvalidGroupCount,
     PreviewChanged,
+    PhaseConflict,
     ReimportRefused,
     WarningsNotAcknowledged,
 )
@@ -180,6 +181,18 @@ def _register_activity_errors(app: FastAPI) -> None:
     )
 
 
+def _register_phase_errors(app: FastAPI) -> None:
+    """002 contracts/rest-api.md: Teacher activity control."""
+    register_error(
+        app,
+        PhaseConflict,
+        409,
+        "phase_conflict",
+        lambda e: str(e),
+        lambda e: {"phase": e.phase.value},  # type: ignore[attr-defined]
+    )
+
+
 def _register_auth_errors(app: FastAPI) -> None:
     """002 contracts/rest-api.md › Teacher access. No details: never hint at the passcode."""
     register_error(app, WrongPasscode, 401, "wrong_passcode", "Wrong passcode.")
@@ -218,6 +231,7 @@ def create_app(
     _register_core_errors(app)
     _register_activity_errors(app)
     _register_auth_errors(app)
+    _register_phase_errors(app)
     app.add_middleware(TeacherGuardMiddleware)
     app.include_router(auth_routes.router)
     app.include_router(teacher_routes.router)

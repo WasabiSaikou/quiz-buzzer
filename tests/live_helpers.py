@@ -58,3 +58,44 @@ def anonymous_state(activity: dict, phase: str | None = None) -> dict[str, Any]:
         "membership": None,
         "group": None,
     }
+
+
+def next_of_type(ws, message_type: str, limit: int = 10) -> dict[str, Any]:
+    """Receive until a message of `message_type` arrives (skipping other snapshot types).
+
+    Only call this when such a message is certain to come: WebSocket receives block.
+    """
+    for _ in range(limit):
+        message = ws.receive_json()
+        if message["type"] == message_type:
+            return message
+    raise AssertionError(f"no {message_type} within {limit} messages")
+
+
+def add_member(app, activity_id: int, group_number: int, name: str, token: str) -> int:
+    """Create a participant directly (T015 db helper) with a known cookie token."""
+    from quizbuzzer import db
+    from quizbuzzer.services.participation_service import hash_token
+
+    conn = db.connect(app.state.db_path)
+    try:
+        return db.insert_participant(
+            conn,
+            activity_id=activity_id,
+            group_number=group_number,
+            display_name=name,
+            token_hash=hash_token(token),
+            joined_at="2026-11-27T01:00:00Z",
+        )
+    finally:
+        conn.close()
+
+
+def cookie(token: str) -> dict[str, str]:
+    return {"cookie": f"qb_participant={token}"}
+
+
+def open_activity(client, activity: dict) -> dict:
+    r = client.post(f"/api/teacher/activities/{activity['id']}/open")
+    assert r.status_code == 200, r.text
+    return r.json()

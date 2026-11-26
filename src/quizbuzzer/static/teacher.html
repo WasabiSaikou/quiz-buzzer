@@ -45,11 +45,31 @@
     .current-head { display: flex; gap: 10px; align-items: center; margin: 0 0 4px; }
     .tag.DRAFT { background: #fff8c5; border-color: #eac54f; }
     .tag.OPEN { background: #dafbe1; border-color: #4ac26b; }
+    .tag.CLOSED { background: #eaeef2; border-color: #afb8c1; }
+    .tag.winner { background: #fff8c5; border-color: #d4a72c; font-weight: 600; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 12px; }
+    button.danger { border-color: #cf222e; color: #cf222e; background: #fff; }
+    .dash-unit { margin: 0 0 16px; }
+    .dash-unit h3 { margin: 0 0 6px; font-size: 15px; }
+    .groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin: 0 0 16px; }
+    .groups div { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
   </style>
 </head>
 <body>
   <header><h1>Quiz Buzzer（課堂搶答系統）· Teacher</h1></header>
   <main>
+    <section id="lock-section" class="hidden">
+      <h2>Teacher passcode</h2>
+      <div id="lock-message" class="banner hidden" role="alert"></div>
+      <form id="lock-form" class="row">
+        <div class="grow">
+          <label for="passcode">Passcode</label>
+          <input id="passcode" type="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="primary">Unlock</button>
+      </form>
+    </section>
+
     <section id="import-section">
       <h2 id="import-heading">Import a Guided Notes worksheet</h2>
       <p id="reimport-note" class="muted hidden"></p>
@@ -109,11 +129,24 @@
         <span id="current-phase" class="tag"></span>
       </p>
       <p class="muted" id="current-meta"></p>
-      <p><button type="button" id="reimport-button" class="hidden">Re-import questions…</button></p>
+      <div class="actions">
+        <button type="button" id="open-button" class="primary hidden">Open activity</button>
+        <button type="button" id="reimport-button" class="hidden">Re-import questions…</button>
+        <button type="button" id="cancel-button" class="danger hidden">Cancel activity</button>
+        <button type="button" id="end-button" class="danger hidden">End activity</button>
+        <button type="button" id="new-import-button" class="primary hidden">Import a new worksheet</button>
+      </div>
       <table>
         <thead><tr><th>題號</th><th>Type</th><th>Sub-parts</th><th>Answer cells</th></tr></thead>
         <tbody id="current-units"></tbody>
       </table>
+    </section>
+
+    <section id="dashboard-section" class="hidden" aria-live="polite">
+      <h2 id="dashboard-title">Live dashboard</h2>
+      <h3 class="muted" style="font-size:14px;margin:0 0 6px">Groups</h3>
+      <div id="dashboard-groups" class="groups"></div>
+      <div id="dashboard-units"></div>
     </section>
 
     <p id="live-status" class="muted">Connecting…</p>

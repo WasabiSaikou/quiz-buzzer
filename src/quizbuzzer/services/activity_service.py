@@ -23,7 +23,7 @@ from quizbuzzer.models import (
     Phase,
     SpreadsheetInfo,
 )
-from quizbuzzer.realtime.hub import activity_state_message
+from quizbuzzer.realtime.hub import activity_state_message, dashboard_state_message
 from quizbuzzer.services import guided_notes_parser
 from quizbuzzer.services.sheets_adapter import SheetsAdapter
 from quizbuzzer.services.sheets_url import parse_spreadsheet_url
@@ -107,6 +107,22 @@ class ReimportRefused(Exception):
             f"Re-import is not possible: the activity is {phase.value}. Only a DRAFT activity's "
             f"questions can be replaced; its questions were not changed."
         )
+
+
+class PhaseConflict(Exception):
+    """A phase change the current phase does not allow (FR-005; contracts: phase_conflict)."""
+
+    def __init__(self, activity_id: int, phase: Phase, action: str) -> None:
+        self.activity_id = activity_id
+        self.phase = phase
+        self.action = action
+        if action == "end" and phase is Phase.DRAFT:
+            message = "A DRAFT activity cannot be ended. Use Cancel activity instead."
+        elif action == "open" and phase is Phase.CLOSED:
+            message = "The activity is CLOSED; a closed activity cannot be opened again."
+        else:
+            message = f"The activity is already {phase.value}."
+        super().__init__(message)
 
 
 def _utc_now() -> str:
@@ -275,6 +291,98 @@ class ActivityService:
         log.info("activity questions replaced: id=%s units=%s", activity_id, len(activity.units))
         self._publish(activity)
         return activity
+
+    # --- 002: phase changes (diagrams/002-seq-open-activity.puml, -end-activity) -------------
+
+    def open_activity(self, activity_id: int) -> Activity:
+        """DRAFT -> OPEN, checked and changed in one transaction (FR-005, FR-006)."""
+        return self._transition(activity_id, "open", Phase.DRAFT, Phase.OPEN)
+
+    def _transition(self, activity_id: int, action: str, required: Phase, target: Phase) -> Activity:
+        conn = db.connect(self.db_path)
+        try:
+            with db.transaction(conn):
+                phase = db.get_activity_phase(conn, activity_id)
+                if phase is None:
+                    raise ActivityNotFound(activity_id)
+                if phase is not required:
+                    raise PhaseConflict(activity_id, phase, action)
+                db.set_phase(conn, activity_id, target)
+            activity = db.get_activity_with_units(conn, activity_id)
+        finally:
+            conn.close()
+        log.info("activity %s: id=%s phase=%s", action, activity_id, target.value)
+        # Publish only after the commit (plan: Implementation Notes).
+        self.publish_teacher_state(activity)
+        self._publish_students()
+        return activity
+
+    # --- 002: teacher dashboard (contracts/rest-api.md: Dashboard) -------------------------
+
+    def get_dashboard(self, activity_id: int) -> dict:
+        conn = db.connect(self.db_path)
+        try:
+            activity = db.get_activity_with_units(conn, activity_id)
+            if activity is None:
+                raise ActivityNotFound(activity_id)
+            submissions = db.list_dashboard_submissions(conn, activity_id)
+            members = db.list_members_by_group(conn, activity_id)
+        finally:
+            conn.close()
+        by_unit: dict[int, list] = {}
+        for s in submissions:
+            by_unit.setdefault(s.unit_id, []).append(s)
+        return {
+            "activityId": activity.id,
+            "phase": activity.phase.value,
+            "groupCount": activity.group_count,
+            "units": [
+                {
+                    "unitId": u.id,
+                    "number": u.number,
+                    "kind": u.kind.value,
+                    "subParts": [sl.sub_part for sl in sorted(u.slots, key=lambda sl: sl.sub_part)],
+                    "submissions": [
+                        {
+                            "rank": s.rank,
+                            "isWinner": s.is_winner,
+                            "groupNumber": s.group_number,
+                            "submittedBy": s.submitted_by,
+                            "receivedAt": s.received_at,
+                            "answers": [{"subPart": a.sub_part, "text": a.text} for a in s.answers],
+                        }
+                        for s in sorted(by_unit.get(u.id, []), key=lambda s: s.rank)
+                    ],
+                }
+                for u in sorted(activity.units, key=lambda u: u.position)
+            ],
+            "groups": [
+                {
+                    "number": n,
+                    "members": list(members.get(n, [])),
+                    "memberCount": len(members.get(n, [])),
+                }
+                for n in range(1, activity.group_count + 1)
+            ],
+        }
+
+    def publish_teacher_state(self, activity: Activity | None) -> None:
+        """activity.state and, for an existing activity, dashboard.state to every teacher."""
+        if self.hub is None:
+            return
+        self.hub.publish_from_thread(activity_state_message(activity))
+        if activity is not None:
+            self.hub.publish_from_thread(dashboard_state_message(self.get_dashboard(activity.id)))
+
+    def publish_dashboard(self, activity_id: int) -> None:
+        """dashboard.state only (after join / leave / submit; ParticipationService calls it)."""
+        if self.hub is None:
+            return
+        try:
+            dashboard = self.get_dashboard(activity_id)
+        except ActivityNotFound:
+            return
+        self.hub.publish_from_thread(dashboard_state_message(dashboard))
 
     # --- helpers ------------------------------------------------------------------------------
 

@@ -198,15 +198,15 @@ refused with 409.
 
 ### Tests for User Story 1 (write first, observe failing) ⚠️
 
-- [ ] T018 [P] [US1] Write `tests/unit/test_activity_phases.py` (open part) against `ActivityService` with a recording hub and a recording `student_publisher`:
+- [X] T018 [P] [US1] Write `tests/unit/test_activity_phases.py` (open part; **also the dashboard-shape test**, moved forward from T033 because `open` publishes `dashboard.state`, so `get_dashboard` is implemented in T021) against `ActivityService` with a recording hub and a recording `student_publisher`:
   - `open_activity` on DRAFT returns the activity with phase OPEN and persists it;
   - on OPEN and on CLOSED it raises `PhaseConflict` with `.phase`, and the row is unchanged;
   - on a missing id it raises `ActivityNotFound`;
   - success publishes exactly one `activity.state` (OPEN) and one `dashboard.state` to teachers and calls `student_publisher` once, all after the commit (the recorder checks the DB phase at call time);
   - a refused open publishes nothing;
   - after open, `replace_questions` raises `ReimportRefused` (001 FR-026).
-- [ ] T019 [P] [US1] Write `tests/integration/test_phase_concurrency.py` (open part). Two threads with their own `ActivityService` on the same file DB call `open_activity` behind a `threading.Barrier`: exactly one succeeds, the other raises `PhaseConflict(OPEN)`. Repeat 20 times (FR-006).
-- [ ] T020 [P] [US1] Write `tests/integration/test_live_flow_api.py` (open part):
+- [X] T019 [P] [US1] Write `tests/integration/test_phase_concurrency.py` (open part). Two threads with their own `ActivityService` on the same file DB call `open_activity` behind a `threading.Barrier`: exactly one succeeds, the other raises `PhaseConflict(OPEN)`. Repeat 20 times (FR-006).
+- [X] T020 [P] [US1] Write `tests/integration/test_live_flow_api.py` (open part):
   - `POST /api/teacher/activities/{id}/open` gives 200 with an `Activity` of phase OPEN;
   - repeating it gives 409 `phase_conflict` with `details.phase == "OPEN"` and a message containing "already OPEN";
   - an unknown id gives 404 `not_found`;
@@ -218,7 +218,7 @@ refused with 409.
 
 ### Implementation for User Story 1
 
-- [ ] T021 [US1] Implement `ActivityService.open_activity(activity_id)` and `PhaseConflict(phase)` in `src/quizbuzzer/services/activity_service.py`, following `diagrams/002-seq-open-activity.puml`:
+- [X] T021 [US1] Implement `ActivityService.open_activity(activity_id)` and `PhaseConflict(phase)` in `src/quizbuzzer/services/activity_service.py`, following `diagrams/002-seq-open-activity.puml`:
   1. `BEGIN IMMEDIATE`;
   2. `db.get_activity_phase`;
   3. `db.set_phase(conn, id, OPEN)`;
@@ -226,12 +226,12 @@ refused with 409.
   5. publish teacher snapshots, then `student_publisher()`.
 
   Add `set_phase` to `src/quizbuzzer/db.py`. Makes T018 and T019 pass.
-- [ ] T022 [US1] Add `POST /activities/{activity_id}/open` to `src/quizbuzzer/api/teacher_routes.py` and the `phase_conflict` 409 handler (with `details.phase`) to `src/quizbuzzer/main.py`. Makes T020 pass.
-- [ ] T023 [US1] Extend `src/quizbuzzer/static/teacher.html` and `teacher.js`:
+- [X] T022 [US1] Add `POST /activities/{activity_id}/open` to `src/quizbuzzer/api/teacher_routes.py` and the `phase_conflict` 409 handler (with `details.phase`) to `src/quizbuzzer/main.py`. Makes T020 pass.
+- [X] T023 [US1] Extend `src/quizbuzzer/static/teacher.html` and `teacher.js`:
   - a passcode form shown on any 401 `teacher_required` or a `/ws/teacher` close with 4401, which posts to `/api/teacher/session` and then reloads state;
   - an "Open" button, visible only in DRAFT, with a `confirm()` stating it cannot be undone (FR-007);
   - phase shown from `activity.state` only (Principle IV).
-- [ ] T024 [US1] Complete the waiting and answering screens in `src/quizbuzzer/static/student.js`. Waiting shows the group number. Answering lists units by number in the given order, with one input per sub-part labelled （k） for a 題組 and one input for a single question, and no question text (FR-015). Rendering comes only from `student.state`, and the submit buttons are wired in US2.
+- [X] T024 [US1] Complete the waiting and answering screens in `src/quizbuzzer/static/student.js`. Waiting shows the group number. Answering lists units by number in the given order, with one input per sub-part labelled （k） for a 題組 and one input for a single question, and no question text (FR-015). Rendering comes only from `student.state`, and the submit buttons are wired in US2.
 
 **Checkpoint**: US1 works on its own: unlock, open, and every screen switches.
 

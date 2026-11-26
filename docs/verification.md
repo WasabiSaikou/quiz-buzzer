@@ -112,7 +112,8 @@ Each core-rule test was written first, run, and **observed failing** before its 
 
 | Phase | Tests written first | Red run (summary) | Green run | Commit |
 |---|---|---|---|---|
-| 2 · Foundational: passcode config, teacher guard, schema, visibility filter, student state | `unit/test_config.py`, `unit/test_teacher_sessions.py`, `unit/test_visibility.py`, `unit/test_db.py` (002 part), `integration/test_teacher_guard.py`, `integration/test_ws_student.py` (state part) | 41 failed, 2 collection errors (`api.auth`, `services.visibility` missing), 11 passed (pre-existing `test_db` tests) | 272 passed (full suite) | Phase 2 commit |
+| 2 · Foundational: passcode config, teacher guard, schema, visibility filter, student state | `unit/test_config.py`, `unit/test_teacher_sessions.py`, `unit/test_visibility.py`, `unit/test_db.py` (002 part), `integration/test_teacher_guard.py`, `integration/test_ws_student.py` (state part) | 41 failed, 2 collection errors (`api.auth`, `services.visibility` missing), 11 passed (pre-existing `test_db` tests) | 272 passed (full suite) | `f76e580` |
+| 3 · US1 open + dashboard shape | `unit/test_activity_phases.py` (open, dashboard shape), `integration/test_phase_concurrency.py` (open vs open, 20 rounds), `integration/test_live_flow_api.py` (open) | 5 failed, 2 collection errors (`PhaseConflict` missing) | 287 passed (full suite) | US1 commit |
 
 ## Manual verification (M11–M25)
 
