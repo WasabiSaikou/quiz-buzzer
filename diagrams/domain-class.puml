@@ -208,7 +208,6 @@ package "Transient results / export types (003, not stored)" <<Rectangle>> {
     activityId : int
     title : str
     units : UnitResult[]
-    forStudent() : StudentResults
   }
   class UnitResult {
     number : int
@@ -237,24 +236,26 @@ package "Transient results / export types (003, not stored)" <<Rectangle>> {
     submissionCount : int
   }
   class CellWrite {
-    a1Range : str {current tab title + cell}
+    a1Ref : str {from the RE-PARSED slot}
     text : str {RAW}
   }
   class ExportReport {
     cellsWritten : int
+    unitsWritten : int
     unitsSkipped : int {no winner}
   }
   class ExportProblem {
     kind : parse_error | missing_question\n | missing_sub_part
     questionNumber : int | None
     subPart : int | None
+    code : str | None {001 issue code}
     message : str
   }
 }
 
 ActivityResults *-- UnitResult
 UnitResult *-- ResultEntry
-ActivityResults ..> StudentResults : forStudent()
+ActivityResults ..> StudentResults : projected by student_view()
 ExportReport ..> CellWrite : built from
 
 note bottom of ExportProblem

@@ -20,14 +20,14 @@ participant "RealtimeHub" as RT
 
 == Teacher ends the activity (002-seq-end-activity), results are pushed ==
 ACT -> PSVC : publish_student_states()\n(phase is now CLOSED)
-PSVC -> RES : build_results(activity)
+PSVC -> RES : results_for(activity)
 RES -> DB : read units, slots, submissions,\nanswers (rank order)
 DB --> RES : rows
 RES --> PSVC : ActivityResults
 loop every connected student socket
   PSVC -> VIS : student_view(activity, own participant,\nmembers, own_submissions, results)
   alt activity.phase = CLOSED and participant belongs to activity
-    VIS --> PSVC : phase CLOSED + own group +\nresults.forStudent()\n(all groups' answers and ranks,\nno submitter names / times)
+    VIS --> PSVC : phase CLOSED + own group +\nresults, entries stripped\n(all groups' answers and ranks,\nno submitter names / times)
   else no membership of this activity
     VIS --> PSVC : phase CLOSED, membership None,\nno results
   end
@@ -42,7 +42,7 @@ SUI -> API : GET /api/student/state (participant cookie)
 API -> PSVC : state_for(cookie)
 PSVC -> DB : read activity, participant, own group
 alt phase = CLOSED
-  PSVC -> RES : build_results(activity)
+  PSVC -> RES : results_for(activity)
   RES --> PSVC : ActivityResults
 else phase DRAFT / OPEN
   note right of PSVC

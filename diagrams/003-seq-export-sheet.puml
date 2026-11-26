@@ -12,8 +12,9 @@ participant "Teacher guard" as AUTH
 participant "SheetExporter" as EXP
 participant "ResultsService" as RES
 database "SQLite store\n(db.py)" as DB
-participant "SheetsAdapter\n(GoogleSheetsAdapter)" as SA
+participant "SheetsAdapter\n(GoogleSheetsAdapter,\nread-only scope)" as SA
 participant "Guided Notes parser" as PARSER
+participant "SheetsWriter\n(GoogleSheetsWriter,\nwrite scope)" as SW
 participant "Google Sheets API" as GS
 
 Teacher -> TUI : click "Export to sheet"
@@ -48,11 +49,11 @@ else phase = CLOSED
     alt not shared / no access
       GS --> SA : 403 / 404
       SA --> EXP : raise SheetNotShared(service account email)
-      EXP --> API : 403 sheet_not_shared
-      API --> TUI : "share the sheet with <email> as an Editor"
+      EXP --> API : raise ExportNotShared(email)
+      API --> TUI : 403 export_not_shared:\n"share the sheet with <email> as an Editor"
     else spreadsheet or tab (sheetId) gone
       SA --> EXP : raise SheetNotFound
-      EXP --> API : 404 sheet_not_found, nothing written
+      EXP --> API : 404 not_found, nothing written
     else Google unavailable
       SA --> EXP : raise SheetsUnavailable
       EXP --> API : 502 sheets_unavailable, nothing written
@@ -61,22 +62,22 @@ else phase = CLOSED
       SA --> EXP : TabData
       EXP -> PARSER : parse(grid, merges)
       PARSER --> EXP : ImportPreview (units, slots, issues)
-      EXP -> EXP : problems = parse errors (warnings ignored)\n+ for each winning unit and each stored\nsubPart: find (unit.number, subPart) in preview;\nmissing -> ExportProblem
+      EXP -> EXP : plan_export(activity, results, preview) (pure):\nproblems = parse errors (warnings ignored)\n+ for each winning unit and each stored\nsubPart: find (unit.number, subPart) in preview;\nmissing -> ExportProblem
       alt problems not empty
         EXP --> API : raise ExportBlocked(problems)
         API --> TUI : 409 export_blocked: lists every parse error\nor missing question / sub-part; NOTHING written
       else every winning slot located
-        EXP -> EXP : build CellWrite per winning slot:\nSINGLE -> answer\nGROUP_SET -> "（k）" + answer\nrange = 'current title'!A1 of the NEW location
-        EXP -> SA : write_cells(spreadsheetId, sheetId, cells)
-        SA -> GS : ONE spreadsheets.values.batchUpdate\nvalueInputOption = RAW\n(write scope; import keeps read-only scope)
+        EXP -> EXP : build CellWrite per winning slot:\nSINGLE -> answer\nGROUP_SET -> "（k）" + answer\na1Ref = parsed slot at the NEW location
+        EXP -> SW : write_cells(spreadsheetId, sheetId,\ncurrent tab title, cells)
+        SW -> GS : ONE spreadsheets.values.batchUpdate\nvalueInputOption = RAW\n(own credentials; import keeps read-only scope)
         alt write refused (view-only access)
-          GS --> SA : 403 PERMISSION_DENIED
-          SA --> EXP : raise SheetReadOnly(service account email)
+          GS --> SW : 403 PERMISSION_DENIED
+          SW --> EXP : raise SheetReadOnly(service account email)
           EXP --> API : 403 sheet_read_only
           API --> TUI : "give <email> Editor access"; nothing written
         else write accepted
-          GS --> SA : totalUpdatedCells
-          SA --> EXP : cells written
+          GS --> SW : totalUpdatedCells
+          SW --> EXP : cells written
           EXP --> API : ExportReport(cellsWritten, unitsSkipped)
           API --> TUI : 200 export report
           TUI --> Teacher : "N cells written, M units had no answer"
