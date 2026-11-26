@@ -1,0 +1,83 @@
+@startuml 003-seq-view-results
+title 003 Results - Students and teacher view results after CLOSED
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Student
+participant "Student UI\n(student.js)" as SUI
+actor Teacher
+participant "Teacher UI\n(teacher.js)" as TUI
+participant "API server\n(student_routes /\nteacher_routes / ws_routes)" as API
+participant "Teacher guard" as AUTH
+participant "ActivityService" as ACT
+participant "ParticipationService" as PSVC
+participant "ResultsService" as RES
+participant "Visibility filter" as VIS
+database "SQLite store\n(db.py)" as DB
+participant "RealtimeHub" as RT
+
+== Teacher ends the activity (002-seq-end-activity), results are pushed ==
+ACT -> PSVC : publish_student_states()\n(phase is now CLOSED)
+PSVC -> RES : build_results(activity)
+RES -> DB : read units, slots, submissions,\nanswers (rank order)
+DB --> RES : rows
+RES --> PSVC : ActivityResults
+loop every connected student socket
+  PSVC -> VIS : student_view(activity, own participant,\nmembers, own_submissions, results)
+  alt activity.phase = CLOSED and participant belongs to activity
+    VIS --> PSVC : phase CLOSED + own group +\nresults.forStudent()\n(all groups' answers and ranks,\nno submitter names / times)
+  else no membership of this activity
+    VIS --> PSVC : phase CLOSED, membership None,\nno results
+  end
+end
+PSVC -> RT : send each socket its own snapshot
+RT -->> SUI : student.state (CLOSED + results)
+SUI --> Student : results screen: per unit winner group +\nanswer, then rank order; 無人作答 when empty
+
+== Student refreshes or reconnects while CLOSED ==
+Student -> SUI : reload page
+SUI -> API : GET /api/student/state (participant cookie)
+API -> PSVC : state_for(cookie)
+PSVC -> DB : read activity, participant, own group
+alt phase = CLOSED
+  PSVC -> RES : build_results(activity)
+  RES --> PSVC : ActivityResults
+else phase DRAFT / OPEN
+  note right of PSVC
+    Results are never built and never handed
+    to the filter before CLOSED (FR-002).
+  end note
+end
+PSVC -> VIS : student_view(..., results or None)
+note right of VIS
+  Defence in depth: the filter itself re-checks
+  phase = CLOSED before including results, so a
+  bug upstream cannot leak them (Constitution III).
+end note
+VIS --> PSVC : StudentState
+PSVC --> API : StudentState
+API --> SUI : 200 StudentState
+SUI --> Student : results screen again (FR-004)
+
+== Teacher views results of a CLOSED activity ==
+Teacher -> TUI : open results (current CLOSED or past)
+TUI -> API : GET /api/teacher/activities/{id}/results (cookie)
+API -> AUTH : require_teacher(request)
+AUTH --> API : ok (else 401 teacher_required)
+API -> RES : teacher_results(activity_id)
+RES -> DB : read activity phase
+alt activity not found
+  RES --> API : raise ActivityNotFound
+  API --> TUI : 404 not_found
+else phase is DRAFT or OPEN
+  RES --> API : raise PhaseConflict(phase)
+  API --> TUI : 409 phase_conflict "activity is <phase>"\n(the live dashboard is used instead)
+else phase = CLOSED
+  RES -> DB : read units, slots, submissions, answers,\nparticipant display names
+  RES --> API : ActivityResults (with submitter + receivedAt)
+  API --> TUI : 200 results
+  TUI --> Teacher : results + "Export to sheet" + "Download CSV"
+end
+@enduml

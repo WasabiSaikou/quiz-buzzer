@@ -1,0 +1,95 @@
+@startuml 003-seq-export-sheet
+title 003 Export - Teacher writes the winning answers back into the Google Sheet
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Teacher
+participant "Teacher UI\n(teacher.js)" as TUI
+participant "API server\n(teacher_routes)" as API
+participant "Teacher guard" as AUTH
+participant "SheetExporter" as EXP
+participant "ResultsService" as RES
+database "SQLite store\n(db.py)" as DB
+participant "SheetsAdapter\n(GoogleSheetsAdapter)" as SA
+participant "Guided Notes parser" as PARSER
+participant "Google Sheets API" as GS
+
+Teacher -> TUI : click "Export to sheet"
+TUI --> Teacher : confirm: "answer cells of answered units\nwill be overwritten"
+Teacher -> TUI : confirm
+TUI -> API : POST /api/teacher/activities/{id}/export (cookie)
+API -> AUTH : require_teacher(request)
+AUTH --> API : ok (else 401 teacher_required)
+API -> EXP : export(activity_id)
+EXP -> RES : teacher_results(activity_id)
+RES -> DB : read activity, units, slots, submissions
+alt activity not found
+  RES --> EXP : raise ActivityNotFound
+  EXP --> API : 404 not_found
+  API --> TUI : 404
+else phase DRAFT or OPEN
+  RES --> EXP : raise PhaseConflict(phase)
+  EXP --> API : 409 phase_conflict "activity is <phase>"
+  API --> TUI : 409, nothing written
+else phase = CLOSED
+  RES --> EXP : ActivityResults
+  EXP -> EXP : winners = units with a rank-1 entry
+  alt no winners (zero submissions)
+    EXP --> API : ExportReport(cellsWritten 0, unitsSkipped = all)
+    API --> TUI : 200 "0 cells written"
+    note right of EXP
+      No Google call at all (FR-011).
+    end note
+  else at least one winner
+    EXP -> SA : read_tab(sourceSpreadsheetId, sourceSheetId)
+    SA -> GS : spreadsheets.get (find tab by sheetId,\nits CURRENT title, merges) + values.get
+    alt not shared / no access
+      GS --> SA : 403 / 404
+      SA --> EXP : raise SheetNotShared(service account email)
+      EXP --> API : 403 sheet_not_shared
+      API --> TUI : "share the sheet with <email> as an Editor"
+    else spreadsheet or tab (sheetId) gone
+      SA --> EXP : raise SheetNotFound
+      EXP --> API : 404 sheet_not_found, nothing written
+    else Google unavailable
+      SA --> EXP : raise SheetsUnavailable
+      EXP --> API : 502 sheets_unavailable, nothing written
+    else read ok
+      GS --> SA : grid, merges, current tab title
+      SA --> EXP : TabData
+      EXP -> PARSER : parse(grid, merges)
+      PARSER --> EXP : ImportPreview (units, slots, issues)
+      EXP -> EXP : problems = parse errors (warnings ignored)\n+ for each winning unit and each stored\nsubPart: find (unit.number, subPart) in preview;\nmissing -> ExportProblem
+      alt problems not empty
+        EXP --> API : raise ExportBlocked(problems)
+        API --> TUI : 409 export_blocked: lists every parse error\nor missing question / sub-part; NOTHING written
+      else every winning slot located
+        EXP -> EXP : build CellWrite per winning slot:\nSINGLE -> answer\nGROUP_SET -> "（k）" + answer\nrange = 'current title'!A1 of the NEW location
+        EXP -> SA : write_cells(spreadsheetId, sheetId, cells)
+        SA -> GS : ONE spreadsheets.values.batchUpdate\nvalueInputOption = RAW\n(write scope; import keeps read-only scope)
+        alt write refused (view-only access)
+          GS --> SA : 403 PERMISSION_DENIED
+          SA --> EXP : raise SheetReadOnly(service account email)
+          EXP --> API : 403 sheet_read_only
+          API --> TUI : "give <email> Editor access"; nothing written
+        else write accepted
+          GS --> SA : totalUpdatedCells
+          SA --> EXP : cells written
+          EXP --> API : ExportReport(cellsWritten, unitsSkipped)
+          API --> TUI : 200 export report
+          TUI --> Teacher : "N cells written, M units had no answer"
+        end
+      end
+    end
+  end
+end
+
+note over EXP, GS
+  Repeatable: every export re-reads and re-locates (FR-012).
+  RAW: "=1+1" is stored as text, never as a formula (FR-010).
+  Only cell values change; formatting untouched.
+  Answer text and display names are never logged (FR-024).
+end note
+@enduml

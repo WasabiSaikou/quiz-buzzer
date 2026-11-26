@@ -1,0 +1,48 @@
+@startuml 003-seq-download-csv
+title 003 CSV - Teacher downloads all submissions as CSV
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Teacher
+participant "Teacher UI\n(teacher.js)" as TUI
+participant "API server\n(teacher_routes)" as API
+participant "Teacher guard" as AUTH
+participant "ResultsService" as RES
+database "SQLite store\n(db.py)" as DB
+participant "CSV writer\n(csv_export.to_csv)" as CSVW
+
+Teacher -> TUI : click "Download CSV"
+TUI -> API : GET /api/teacher/activities/{id}/results.csv (cookie)
+API -> AUTH : require_teacher(request)
+AUTH --> API : ok (else 401 teacher_required, no data)
+API -> RES : results_csv(activity_id)
+RES -> DB : read activity phase
+alt activity not found
+  RES --> API : raise ActivityNotFound
+  API --> TUI : 404 not_found
+else phase DRAFT or OPEN
+  RES --> API : raise PhaseConflict(phase)
+  API --> TUI : 409 phase_conflict "activity is <phase>"
+else phase = CLOSED
+  RES -> DB : read units (sheet order), submissions (rank),\nanswers (subPart), receivedAt
+  RES -> CSVW : to_csv(ActivityResults)
+  CSVW -> CSVW : BOM + header\nquestion_no,sub_part,group,answer,\nrank,is_winner,submitted_at
+  loop each unit, each submission (rank order), each slot
+    CSVW -> CSVW : sub_part = k for 題組, empty for SINGLE\nis_winner = rank = 1 ? true : false\nsubmitted_at = ISO 8601 with UTC offset
+    CSVW -> CSVW : answer starts with = + - @ ?\n-> prefix '
+    CSVW -> CSVW : quote field if it has , " CR LF\n(inner " doubled)
+  end
+  CSVW --> RES : bytes (UTF-8 with BOM)
+  RES --> API : bytes + safe file name\n(activity id + sanitised title)
+  API --> TUI : 200 text/csv; charset=utf-8\nContent-Disposition: attachment
+  TUI --> Teacher : file saved
+end
+
+note right of CSVW
+  Pure function, no I/O: tested directly.
+  Zero submissions -> header row only.
+  Read only: nothing in the activity changes.
+end note
+@enduml

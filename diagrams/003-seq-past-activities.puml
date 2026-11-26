@@ -1,0 +1,45 @@
+@startuml 003-seq-past-activities
+title 003 Past activities - Teacher lists CLOSED activities and opens one
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Teacher
+participant "Teacher UI\n(teacher.js)" as TUI
+participant "API server\n(teacher_routes)" as API
+participant "Teacher guard" as AUTH
+participant "ResultsService" as RES
+database "SQLite store\n(db.py)" as DB
+
+Teacher -> TUI : open "Past activities"
+TUI -> API : GET /api/teacher/activities/closed (cookie)
+API -> AUTH : require_teacher(request)
+AUTH --> API : ok (else 401 teacher_required)
+API -> RES : list_closed()
+RES -> DB : SELECT CLOSED activities\n+ unit count + submission count\nORDER BY createdAt DESC, id DESC
+DB --> RES : rows
+RES --> API : PastActivitySummary[]
+API --> TUI : 200 list (may be empty)
+alt list is empty
+  TUI --> Teacher : "No past activities"
+else
+  TUI --> Teacher : title, created, groups, units, submissions
+  Teacher -> TUI : open one activity
+  TUI -> API : GET /api/teacher/activities/{id}/results
+  note right of API
+    Same flow as 003-seq-view-results
+    (teacher part); from there the teacher
+    can export (003-seq-export-sheet) or
+    download the CSV (003-seq-download-csv).
+  end note
+  API --> TUI : 200 results
+  TUI --> Teacher : results of that activity
+end
+
+note right of DB
+  Route declared before /activities/{activity_id}
+  so "closed" is not parsed as an id.
+  DRAFT / OPEN activities never listed (FR-023).
+end note
+@enduml

@@ -1,5 +1,5 @@
 @startuml domain-class
-title Quiz Buzzer (課堂搶答系統) - Domain Classes (models.py; 001 + 002)
+title Quiz Buzzer (課堂搶答系統) - Domain Classes (models.py; 001 + 002 + 003)
 
 skinparam shadowing false
 skinparam defaultFontName "Microsoft JhengHei"
@@ -101,6 +101,9 @@ note right of AnswerSlot
   SINGLE -> "answer"; every 題組 slot ->
   "（k）answer" (k = subPart), including
   an unmarked numbered row (subPart 1).
+  003 does NOT write to the stored cell:
+  it re-locates (unit number, subPart) in
+  a fresh parse of the tab (by sheetId).
 end note
 
 note bottom of Submission
@@ -112,6 +115,8 @@ note bottom of Submission
   Answers: one per slot of the unit, all non-empty.
   Never sent to students of other groups before
   CLOSED, rank never sent to students in 002 (III).
+  003: read only. Other groups' answers and every
+  rank reach students only once phase = CLOSED.
 end note
 
 note right of Participant
@@ -197,6 +202,66 @@ ImportPreview *-- HeaderInfo
 ImportPreview *-- ParsedUnit
 ImportPreview *-- Issue
 ParsedUnit *-- ParsedSlot
+
+package "Transient results / export types (003, not stored)" <<Rectangle>> {
+  class ActivityResults {
+    activityId : int
+    title : str
+    units : UnitResult[]
+    forStudent() : StudentResults
+  }
+  class UnitResult {
+    number : int
+    kind : UnitKind
+    entries : ResultEntry[] {rank order}
+    winner() : ResultEntry | None
+    noAnswer() : bool {無人作答}
+  }
+  class ResultEntry {
+    rank : int
+    groupNumber : int
+    isWinner : bool
+    answers : (subPart, text)[]
+    submitterName : str {teacher only}
+    receivedAt : str {teacher only}
+  }
+  class StudentResults <<view>> {
+    units : (number, kind,\n entries without\n submitterName / receivedAt)[]
+  }
+  class PastActivitySummary {
+    activityId : int
+    title : str
+    createdAt : str
+    groupCount : int
+    unitCount : int
+    submissionCount : int
+  }
+  class CellWrite {
+    a1Range : str {current tab title + cell}
+    text : str {RAW}
+  }
+  class ExportReport {
+    cellsWritten : int
+    unitsSkipped : int {no winner}
+  }
+  class ExportProblem {
+    kind : parse_error | missing_question\n | missing_sub_part
+    questionNumber : int | None
+    subPart : int | None
+    message : str
+  }
+}
+
+ActivityResults *-- UnitResult
+UnitResult *-- ResultEntry
+ActivityResults ..> StudentResults : forStudent()
+ExportReport ..> CellWrite : built from
+
+note bottom of ExportProblem
+  Any ExportProblem aborts the export:
+  zero CellWrites are sent (003 FR-009).
+  Raised as ExportBlocked(problems[]).
+end note
 
 package "In memory (lost on server restart)" <<Rectangle>> {
   class TeacherSessions {

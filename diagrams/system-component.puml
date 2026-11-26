@@ -1,5 +1,5 @@
 @startuml system-component
-title Quiz Buzzer (課堂搶答系統) - System Components (001 import + 002 live activity)
+title Quiz Buzzer (課堂搶答系統) - System Components (001 import + 002 live activity + 003 results / export)
 
 skinparam componentStyle uml2
 skinparam shadowing false
@@ -9,8 +9,8 @@ actor Teacher
 actor "Student" as Student
 
 node "Browser" {
-  [Teacher UI\nstatic/teacher.html + teacher.js\n(passcode unlock, import,\nopen / end / cancel, live dashboard)] as TUI
-  [Student UI\nstatic/student.html + student.js\n(join, wait, answer,\nown-group view, closed)] as SUI
+  [Teacher UI\nstatic/teacher.html + teacher.js\n(passcode unlock, import,\nopen / end / cancel, live dashboard,\nresults, export, CSV, past activities)] as TUI
+  [Student UI\nstatic/student.html + student.js\n(join, wait, answer,\nown-group view, results when CLOSED)] as SUI
 }
 
 node "Local server (single process: quizbuzzer.main)" {
@@ -24,7 +24,10 @@ node "Local server (single process: quizbuzzer.main)" {
   [Real-time channel\nrealtime/hub.py: RealtimeHub\n(teacher sockets; student sockets\nkeyed by StudentKey or None)] as RT
   [Activity service\nservices/activity_service.py:\nActivityService\n(import, open, end,\ncancel DRAFT, dashboard)] as ACT
   [Participation service\nservices/participation_service.py:\nParticipationService\n(join, leave, submit, group state)] as PART
-  [Visibility filter\nservices/visibility.py:\nstudent_view(activity, participant,\nmembers, own_submissions)] as VIS
+  [Visibility filter\nservices/visibility.py:\nstudent_view(activity, participant,\nmembers, own_submissions,\nresults: CLOSED only)] as VIS
+  [Results service (003)\nservices/results_service.py:\nResultsService\n(results, past list, CSV)] as RES
+  [Sheet exporter (003)\nservices/sheet_exporter.py:\nSheetExporter\n(re-read, re-locate, write)] as EXP
+  [CSV writer (003)\nservices/csv_export.py:\nto_csv(results) -> bytes] as CSVW
   [Guided Notes parser\nservices/guided_notes_parser.py:\nparse(grid, merges)] as PARSER
   component "Sheets adapter" as SA {
     interface "SheetsAdapter" as SAI
@@ -51,6 +54,8 @@ AR --> AUTH : TeacherSessions.create(passcode)
 TR --> AUTH : every route, before routing\n(TeacherGuardMiddleware)
 WSR --> AUTH : /ws/teacher upgrade
 TR --> ACT : teacher commands and queries
+TR --> RES : results, past list, CSV (003)
+TR --> EXP : export to sheet (003)
 SR --> PART : join, leave, submit, state
 WSR --> ACT : state on connect (teacher)
 WSR --> PART : state on connect (student)
@@ -66,8 +71,14 @@ PART --> RT : student.state snapshots
 PART --> ACT : teacher_publisher = publish_dashboard\n(after join / leave / submit)
 ACT --> PART : publish_student_states()\nafter create / re-import /\nopen / end / cancel
 PART --> VIS : every student-bound\nresponse and push
+PART --> RES : build_results(activity)\nonly when phase = CLOSED (003)
+RES --> DB : read units, slots,\nsubmissions (read only)
+RES --> CSVW : to_csv(teacher results)
+EXP --> RES : teacher results (winners)
+EXP --> SAI : read_tab(spreadsheet_id, sheet_id) /\nwrite_cells(spreadsheet_id, sheet_id, cells)
+EXP --> PARSER : parse(grid, merges)\n(same detection as import)
 GSAD ..|> SAI
-GSAD --> GSA : spreadsheets.get, values.get (import)\nvalues.batchUpdate RAW (export, 003)
+GSAD --> GSA : spreadsheets.get, values.get (import)\nvalues.batchUpdate RAW\n(export only, write scope, 003)
 
 note right of PARSER
   Pure function: no network, no DB.
@@ -101,6 +112,10 @@ note right of VIS
   handed other groups' rows. Every student
   message is built by ParticipationService
   through it (ActivityService delegates).
+  003: only when phase = CLOSED does it add
+  the StudentResults (all groups' answers +
+  ranks, no submitter names / times); it
+  re-checks the phase and drops them otherwise.
 end note
 
 note left of AUTH
@@ -109,7 +124,8 @@ note left of AUTH
   in an HttpOnly cookie, kept in memory until
   restart. Covers ALL teacher routes (002 open /
   end / cancel / dashboard and 001 import /
-  preview / confirm / re-import) and the
+  preview / confirm / re-import, 003 results /
+  past list / export / CSV) and the
   /ws/teacher upgrade.
 end note
 
@@ -118,6 +134,25 @@ note bottom of SA
   (LazyGoogleSheetsAdapter) so the app starts
   without Google access; tests inject
   FakeSheetsAdapter via create_app(adapter=...).
+end note
+
+note right of EXP
+  Feature 003. Never writes to the cell
+  addresses stored at import: re-reads the
+  tab by sheetId, re-parses, and finds each
+  winning slot by (question number, sub-part).
+  Any parse error or missing slot -> abort,
+  nothing written. One values.batchUpdate,
+  valueInputOption RAW; ranges use the tab's
+  CURRENT title looked up from sheetId.
+  Import keeps the read-only scope (001 FR-005);
+  only write_cells uses the write scope.
+end note
+
+note bottom of CSVW
+  Feature 003. Pure function. UTF-8 with BOM,
+  RFC 4180 quoting; answers starting with
+  = + - @ get a leading ' (no formula run).
 end note
 
 note as SUPPORT
