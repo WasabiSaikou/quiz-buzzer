@@ -117,7 +117,7 @@ template link and compare the preview with the known questions, sub-parts and ce
 
 ### Fixtures for User Story 1
 
-- [ ] T016 [P] [US1] Create `tests/fixtures/sheets/shifted_layout.json` (synthetic; research R9). It needs:
+- [X] T016 [P] [US1] Create `tests/fixtures/sheets/shifted_layout.json` (synthetic; research R9). It needs:
   - a header that is lower and further right, with tab title `練習`;
   - merged question-text cells, a horizontally merged answer cell and a vertically merged 題號 cell;
   - full-width markers `（１）` and mixed `（1)`, and blank spacer rows inside a 題組;
@@ -126,10 +126,10 @@ template link and compare the preview with the known questions, sub-parts and ce
   - every number form `1`, `2.`, `3、`, `Q4`, `q5` and `６`.
 
   Add a second tab so tab selection is tested. Write the expected results by hand in `tests/fixtures/sheets/shifted_layout.expected.json` (format in research R9).
-- [ ] T017 [P] [US1] Write the hand-checked expected results for the two team-supplied course templates, `tests/fixtures/sheets/template_single.csv` and `template_group.csv` (present; no personal data per the team; research R9). Do not edit the CSVs. Use the format from research R9. Values, read from the CSVs:
+- [X] T017 [P] [US1] Write the hand-checked expected results for the two team-supplied course templates, `tests/fixtures/sheets/template_single.csv` and `template_group.csv` (present; no personal data per the team; research R9). Do not edit the CSVs. Use the format from research R9. Values, read from the CSVs:
   - `template_single.expected.json`: header `{row: 4, numberColumn: 2, answerColumn: 7}`; units 1–6, all `SINGLE`, `sourceRow` 5, 7, 9, 11, 13, 15, each with one slot `subPart` 1 at `G5`, `G7`, `G9`, `G11`, `G13`, `G15`; totals `{units: 6, slots: 6}`; `issueCodes: []`.
   - `template_group.expected.json`: the same header. Unit 1 is `GROUP_SET`, `sourceRow` 5, slots (1, `G5`), (2, `G6`); the numbered row holds its own `（1）` marker (research R4 rule 1). Unit 2 is `GROUP_SET`, `sourceRow` 8, slots (1, `G8`), (2, `G9`). Unit 3 is `SINGLE` at `G11`; unit 4 is `SINGLE` at `G13`. Totals `{units: 4, slots: 6}`; `issueCodes: []`. A marker-only cell gives no `slot_cell_has_text`, and the title row 2 above the header is not scanned.
-- [ ] T018 [P] [US1] Create small edge-case grids, one per file, in `tests/fixtures/sheets/edge_cases/`:
+- [X] T018 [P] [US1] Create small edge-case grids, one per file, in `tests/fixtures/sheets/edge_cases/`:
   - header: `no_header`, `header_whitespace` (`題 號`, `作　答`, a line break inside a label), `header_extra_chars` (`作答區`), `header_split_rows`, `header_duplicate_label`;
   - question numbers: `duplicate_numbers`, `number_gap`, `numbers_out_of_order`, `unrecognised_numbers` (`備註`, `0`, `-1`, `1.5`, `一`), `fullwidth_q_and_dot` (`Ｑ1`, `1．`; research R3), `zero_questions`;
   - sub-parts: `stray_answer_text`, `slot_cell_has_text` (`答：`, `______`, `（2）______`, plus a marker-only cell that must produce no warning), `duplicate_sub_part`, `sub_part_gap`, `orphan_sub_part`;
@@ -137,7 +137,7 @@ template link and compare the preview with the known questions, sub-parts and ce
 
 ### Tests for User Story 1 (write first, observe failing) ⚠️
 
-- [ ] T019 [P] [US1] Write `tests/unit/test_guided_notes_parser.py`.
+- [X] T019 [P] [US1] Write `tests/unit/test_guided_notes_parser.py`.
   - **Fixtures:** parametrize over the 3 reference sheets `template_single.csv`, `template_group.csv` and `shifted_layout.json` (T016, T017), loaded through `FakeSheetsAdapter`. For each, assert the header, units, kinds, sub-part counts, slot `(sub_part, a1_ref)`, totals and issue codes against `<stem>.expected.json` (SC-002, FR-012, FR-017, FR-018; Principle II ≥ 3 shapes).
   - **Edge-case grids:** for each T018 grid, assert the exact issue `code` and `severity` (`data-model.md › Issue codes`), plus the `rows` and `cells`. Also assert the message names the row or cell and the fix (FR-016, SC-004).
   - **Header rules:** the topmost header row wins, labels match exactly after removing whitespace, and `header_not_found` names both 題號 and 作答 (FR-006). `header_split_rows` gives `header_not_found` naming both found cells, and `header_duplicate_label` gives `header_ambiguous` naming the duplicate cells (`data-model.md › Issue codes`).
@@ -146,18 +146,18 @@ template link and compare the preview with the known questions, sub-parts and ce
   - **Merges:** a merged answer cell resolves to its top-left; a vertical 題號 merge counts once (research R2).
   - **No fixed addresses:** the same grid shifted by +3 rows and +2 columns yields the same units with shifted cells (FR-007).
   - **Kind and confirmability:** `kind = GROUP_SET` ⇔ slot count ≥ 2 (`data-model.md › QuestionUnit.kind`); `can_confirm` is false exactly when an error exists.
-- [ ] T020 [P] [US1] Write `tests/unit/test_fingerprint.py`. The fingerprint (research R6):
+- [X] T020 [P] [US1] Write `tests/unit/test_fingerprint.py`. The fingerprint (research R6):
   - is stable across calls;
   - changes when any unit number, kind, source row, slot sub-part, row or column changes, or when `spreadsheetId` or `sheetId` changes;
   - does **not** change when only issue messages or warnings change, or when unrelated cell text (e.g. question text) changes.
-- [ ] T021 [P] [US1] Write the preview cases in `tests/unit/test_activity_service.py`:
+- [X] T021 [P] [US1] Write the preview cases in `tests/unit/test_activity_service.py`:
   - `list_tabs` preselects the `#gid=` tab when it exists, otherwise index 0, and an unknown gid falls back to index 0 (FR-003);
   - `preview_import` returns the parser result enriched with `spreadsheet_id`, `sheet_id`, `tab_title`, `spreadsheet_title` and `fingerprint`;
   - an invalid URL raises `InvalidSheetUrl` and the fake records zero calls (FR-002);
   - the adapter receives the `spreadsheet_id` parsed from the URL, never the raw URL;
   - an unknown `sheet_id` raises `SheetNotFound`;
   - the adapter errors propagate unchanged.
-- [ ] T022 [P] [US1] Write `tests/integration/test_import_api.py` against `contracts/rest-api.md`:
+- [X] T022 [P] [US1] Write `tests/integration/test_import_api.py` against `contracts/rest-api.md`:
   - `POST /api/teacher/import/tabs` gives 200 with `preselectedSheetId`;
   - `POST /api/teacher/import/preview` gives 200 with the full preview shape, including a preview that contains errors (`canConfirm: false`);
   - picking another tab rebuilds the preview from that tab only (US1 AS4);
@@ -166,15 +166,15 @@ template link and compare the preview with the known questions, sub-parts and ce
 
 ### Implementation for User Story 1
 
-- [ ] T023 [US1] Implement `src/quizbuzzer/services/guided_notes_parser.py` `parse(grid, merges) -> ImportPreview` so that T019 passes. Keep it pure (no I/O, no Google types). Follow research R2 (merge handling), R3 (NFKC normalisation and the regexes) and R4 (sub-part assignment). Compute `a1Ref` from the 1-based row/column with a `to_a1(row, col)` helper (`data-model.md › AnswerSlot.a1Ref`, `› AnswerSlot.cellRow`, `› AnswerSlot.cellColumn`); never use literal addresses. `sourceRow` is the numbered row (`data-model.md › QuestionUnit.sourceRow`). Units keep sheet row order (`data-model.md › QuestionUnit.position`). `header` is `None` when `header_not_found` (`data-model.md › ImportPreview.header`), and `can_confirm` is true iff there are no error-severity issues (`data-model.md › ImportPreview.can_confirm`).
-- [ ] T024 [US1] Add the pure helper `compute_fingerprint(spreadsheet_id, sheet_id, units) -> str` in `src/quizbuzzer/services/guided_notes_parser.py` (SHA-256 of canonical JSON per research R6) so that T020 passes. `parse()` does not call it; `ActivityService` does (sequence diagrams).
-- [ ] T025 [US1] Implement `src/quizbuzzer/services/google_sheets_adapter.py` `GoogleSheetsAdapter(SheetsAdapter)` per research R5:
+- [X] T023 [US1] Implement `src/quizbuzzer/services/guided_notes_parser.py` `parse(grid, merges) -> ImportPreview` so that T019 passes. Keep it pure (no I/O, no Google types). Follow research R2 (merge handling), R3 (NFKC normalisation and the regexes) and R4 (sub-part assignment). Compute `a1Ref` from the 1-based row/column with a `to_a1(row, col)` helper (`data-model.md › AnswerSlot.a1Ref`, `› AnswerSlot.cellRow`, `› AnswerSlot.cellColumn`); never use literal addresses. `sourceRow` is the numbered row (`data-model.md › QuestionUnit.sourceRow`). Units keep sheet row order (`data-model.md › QuestionUnit.position`). `header` is `None` when `header_not_found` (`data-model.md › ImportPreview.header`), and `can_confirm` is true iff there are no error-severity issues (`data-model.md › ImportPreview.can_confirm`).
+- [X] T024 [US1] Add the pure helper `compute_fingerprint(spreadsheet_id, sheet_id, units) -> str` in `src/quizbuzzer/services/guided_notes_parser.py` (SHA-256 of canonical JSON per research R6) so that T020 passes. `parse()` does not call it; `ActivityService` does (sequence diagrams).
+- [X] T025 [US1] Implement `src/quizbuzzer/services/google_sheets_adapter.py` `GoogleSheetsAdapter(SheetsAdapter)` per research R5:
   - read-only scope credentials from `Settings.credentials_path`;
   - `list_tabs(spreadsheet_id)` and `read_tab(spreadsheet_id, sheet_id)` with the exact `fields`, quoted ranges and `FORMATTED_VALUE` rendering. `read_tab` makes one `spreadsheets.get` (titles + merges) and one `values.get`, and an unknown `sheet_id` raises `SheetNotFound`;
   - a 10 s timeout. It maps HttpError 403 → `SheetNotShared`, 404 → `SheetNotFound`, and anything else or a timeout → `SheetsUnavailable`. Convert the API merges to 0-based half-open tuples (`data-model.md › TabData.merges`). No unit test hits Google; it is verified manually (M1, M3).
-- [ ] T026 [US1] Implement `ActivityService.list_tabs(url)` and `ActivityService.preview_import(url, sheet_id)` in `src/quizbuzzer/services/activity_service.py`, following `diagrams/001-seq-import-preview.puml`. The constructor takes `(adapter, db_path, hub=None)`; the hub is first used in US2. Both methods first call `sheets_url.parse_spreadsheet_url(url)`, so an invalid URL raises before any adapter call. Then they call the adapter with the `spreadsheet_id`. `preview_import` then calls `guided_notes_parser.parse`, adds identity from `TabData`, and calls `compute_fingerprint` (`data-model.md` › parse note). T021 must pass.
-- [ ] T027 [US1] Implement `POST /api/teacher/import/tabs` and `POST /api/teacher/import/preview` in `src/quizbuzzer/api/teacher_routes.py`. Use an `APIRouter` with prefix `/api/teacher` and plain `def` handlers (research R8). Wire the router and the `ActivityService` instance in `create_app` in `src/quizbuzzer/main.py`. T022 must pass.
-- [ ] T028 [US1] Build the preview part of `src/quizbuzzer/static/teacher.html` and `src/quizbuzzer/static/teacher.js` (no build step, plain ES modules):
+- [X] T026 [US1] Implement `ActivityService.list_tabs(url)` and `ActivityService.preview_import(url, sheet_id)` in `src/quizbuzzer/services/activity_service.py`, following `diagrams/001-seq-import-preview.puml`. The constructor takes `(adapter, db_path, hub=None)`; the hub is first used in US2. Both methods first call `sheets_url.parse_spreadsheet_url(url)`, so an invalid URL raises before any adapter call. Then they call the adapter with the `spreadsheet_id`. `preview_import` then calls `guided_notes_parser.parse`, adds identity from `TabData`, and calls `compute_fingerprint` (`data-model.md` › parse note). T021 must pass.
+- [X] T027 [US1] Implement `POST /api/teacher/import/tabs` and `POST /api/teacher/import/preview` in `src/quizbuzzer/api/teacher_routes.py`. Use an `APIRouter` with prefix `/api/teacher` and plain `def` handlers (research R8). Wire the router and the `ActivityService` instance in `create_app` in `src/quizbuzzer/main.py`. T022 must pass.
+- [X] T028 [US1] Build the preview part of `src/quizbuzzer/static/teacher.html` and `src/quizbuzzer/static/teacher.js` (no build step, plain ES modules):
   - URL input → `/import/tabs` → a tab `<select>` that defaults to `preselectedSheetId`;
   - a tab change → `/import/preview`;
   - a table of the units (number, SINGLE/題組, sub-part count, each slot as `tabTitle!A1`, FR-017) and the totals (FR-018);

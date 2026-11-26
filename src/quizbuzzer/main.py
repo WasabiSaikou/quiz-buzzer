@@ -17,8 +17,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from quizbuzzer import db
+from quizbuzzer.api import teacher_routes
 from quizbuzzer.config import ConfigError, Settings, load_settings
 from quizbuzzer.models import SpreadsheetInfo, TabData
+from quizbuzzer.services.activity_service import ActivityService
 from quizbuzzer.services.sheets_adapter import (
     InvalidSheetUrl,
     SheetNotFound,
@@ -146,8 +148,10 @@ def create_app(
     app.state.db_path = db_path
     app.state.adapter = adapter if adapter is not None else LazyGoogleSheetsAdapter(settings)
     app.state.hub = None  # RealtimeHub is wired in by US2 (T037)
+    app.state.service = ActivityService(app.state.adapter, db_path, app.state.hub)
 
     _register_core_errors(app)
+    app.include_router(teacher_routes.router)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

@@ -83,6 +83,15 @@ class SpreadsheetInfo:
     tabs: tuple[TabInfo, ...]
     requested_gid: int | None = None  # from the URL's #gid=, if any
 
+    @property
+    def preselected_sheet_id(self) -> int:
+        """The #gid= tab if it exists, otherwise the first tab (lowest index) (FR-003)."""
+        if self.requested_gid is not None and any(
+            t.sheet_id == self.requested_gid for t in self.tabs
+        ):
+            return self.requested_gid
+        return min(self.tabs, key=lambda t: t.index).sheet_id
+
 
 Merge = tuple[int, int, int, int]
 """(start_row, end_row, start_col, end_col): 0-based, half-open, as the Sheets API returns."""

@@ -1,0 +1,15 @@
+{
+  "_comment": "Hand-written from template_group.csv: header row 4 (題號 B, 作答 G); Q1 and Q2 are 題組 whose numbered row holds its own （1） marker followed by a （2） row; Q3, Q4 single.",
+  "sheetId": 0,
+  "header": { "row": 4, "numberColumn": 2, "answerColumn": 7 },
+  "units": [
+    { "number": 1, "kind": "GROUP_SET", "sourceRow": 5, "slots": [
+      { "subPart": 1, "a1Ref": "G5" }, { "subPart": 2, "a1Ref": "G6" } ] },
+    { "number": 2, "kind": "GROUP_SET", "sourceRow": 8, "slots": [
+      { "subPart": 1, "a1Ref": "G8" }, { "subPart": 2, "a1Ref": "G9" } ] },
+    { "number": 3, "kind": "SINGLE", "sourceRow": 11, "slots": [ { "subPart": 1, "a1Ref": "G11" } ] },
+    { "number": 4, "kind": "SINGLE", "sourceRow": 13, "slots": [ { "subPart": 1, "a1Ref": "G13" } ] }
+  ],
+  "totals": { "units": 4, "slots": 6 },
+  "issueCodes": []
+}

@@ -1,0 +1,18 @@
+{
+  "_comment": "Hand-written from shifted_layout.json tab 練習. Header lower/right (C7, F7) with whitespace inside both labels; Q2 own full-width (１) + mixed (2)/(3) markers with a spacer row; Q3 implicit sub-part 1; Q4 numbered row followed by (1) is not a slot; Q5 answer cell inside merge E19:G19 -> E19; Q6 vertically merged 題號 C20:C21 counts once (copied value in covered C21 ignored).",
+  "sheetId": 918273645,
+  "header": { "row": 7, "numberColumn": 3, "answerColumn": 6 },
+  "units": [
+    { "number": 1, "kind": "SINGLE", "sourceRow": 8, "slots": [ { "subPart": 1, "a1Ref": "F8" } ] },
+    { "number": 2, "kind": "GROUP_SET", "sourceRow": 10, "slots": [
+      { "subPart": 1, "a1Ref": "F10" }, { "subPart": 2, "a1Ref": "F11" }, { "subPart": 3, "a1Ref": "F13" } ] },
+    { "number": 3, "kind": "GROUP_SET", "sourceRow": 14, "slots": [
+      { "subPart": 1, "a1Ref": "F14" }, { "subPart": 2, "a1Ref": "F15" } ] },
+    { "number": 4, "kind": "GROUP_SET", "sourceRow": 16, "slots": [
+      { "subPart": 1, "a1Ref": "F17" }, { "subPart": 2, "a1Ref": "F18" } ] },
+    { "number": 5, "kind": "SINGLE", "sourceRow": 19, "slots": [ { "subPart": 1, "a1Ref": "E19" } ] },
+    { "number": 6, "kind": "SINGLE", "sourceRow": 20, "slots": [ { "subPart": 1, "a1Ref": "F20" } ] }
+  ],
+  "totals": { "units": 6, "slots": 10 },
+  "issueCodes": []
+}

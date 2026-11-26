@@ -1,0 +1,15 @@
+{
+  "_comment": "Hand-written from template_single.csv: header row 4 (題號 B, 作答 G), 6 single questions separated by spacer rows.",
+  "sheetId": 0,
+  "header": { "row": 4, "numberColumn": 2, "answerColumn": 7 },
+  "units": [
+    { "number": 1, "kind": "SINGLE", "sourceRow": 5, "slots": [ { "subPart": 1, "a1Ref": "G5" } ] },
+    { "number": 2, "kind": "SINGLE", "sourceRow": 7, "slots": [ { "subPart": 1, "a1Ref": "G7" } ] },
+    { "number": 3, "kind": "SINGLE", "sourceRow": 9, "slots": [ { "subPart": 1, "a1Ref": "G9" } ] },
+    { "number": 4, "kind": "SINGLE", "sourceRow": 11, "slots": [ { "subPart": 1, "a1Ref": "G11" } ] },
+    { "number": 5, "kind": "SINGLE", "sourceRow": 13, "slots": [ { "subPart": 1, "a1Ref": "G13" } ] },
+    { "number": 6, "kind": "SINGLE", "sourceRow": 15, "slots": [ { "subPart": 1, "a1Ref": "G15" } ] }
+  ],
+  "totals": { "units": 6, "slots": 6 },
+  "issueCodes": []
+}
