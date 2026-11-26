@@ -1,4 +1,5 @@
 // Teacher page (no build step). All sheet text is rendered with textContent, never innerHTML.
+// The server is authoritative: the page shows whatever /ws/teacher says is current.
 
 const $ = (id) => document.getElementById(id);
 
@@ -6,6 +7,7 @@ const state = {
   url: "",
   sheetId: null,
   preview: null,
+  current: null, // full Activity of the current (DRAFT/OPEN) activity, or null
 };
 
 // --- HTTP ------------------------------------------------------------------------------
@@ -61,6 +63,22 @@ function showApiError(box, err) {
   }
 }
 
+function kindLabel(kind) {
+  return el("span", { class: kind === "GROUP_SET" ? "tag group" : "tag" }, kind === "GROUP_SET" ? "題組" : "Single");
+}
+
+function slotCells(unit, tabTitle) {
+  return unit.slots
+    .map((s) => (unit.kind === "GROUP_SET" ? `（${s.subPart}）` : "") + `${tabTitle}!${s.a1Ref}`)
+    .join("  ");
+}
+
+function unitRows(units, tabTitle) {
+  return units.map((u) =>
+    el("tr", {}, el("td", {}, u.number), el("td", {}, kindLabel(u.kind)), el("td", {}, u.slots.length), el("td", {}, slotCells(u, tabTitle))),
+  );
+}
+
 // --- Import: tabs + preview -------------------------------------------------------------
 
 async function loadTabs(url) {
@@ -69,9 +87,7 @@ async function loadTabs(url) {
   const data = await api("POST", "/api/teacher/import/tabs", { url });
   state.url = url;
   const select = $("tab-select");
-  select.replaceChildren(
-    ...data.tabs.map((t) => el("option", { value: String(t.sheetId) }, t.title)),
-  );
+  select.replaceChildren(...data.tabs.map((t) => el("option", { value: String(t.sheetId) }, t.title)));
   select.value = String(data.preselectedSheetId);
   $("tab-row").classList.remove("hidden");
   await loadPreview(data.preselectedSheetId);
@@ -80,10 +96,7 @@ async function loadTabs(url) {
 async function loadPreview(sheetId) {
   hideMessage($("import-message"));
   state.sheetId = Number(sheetId);
-  const preview = await api("POST", "/api/teacher/import/preview", {
-    url: state.url,
-    sheetId: state.sheetId,
-  });
+  const preview = await api("POST", "/api/teacher/import/preview", { url: state.url, sheetId: state.sheetId });
   renderPreview(preview);
 }
 
@@ -98,10 +111,9 @@ function renderPreview(p) {
   const issues = [...p.issues].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1));
   $("issues").replaceChildren(
     ...issues.map((i) => {
-      const where = [
-        i.rows.length ? `Row ${i.rows.join(", ")}` : "",
-        i.cells.length ? `Cell ${i.cells.join(", ")}` : "",
-      ].filter(Boolean).join(" · ");
+      const where = [i.rows.length ? `Row ${i.rows.join(", ")}` : "", i.cells.length ? `Cell ${i.cells.join(", ")}` : ""]
+        .filter(Boolean)
+        .join(" · ");
       return el(
         "li",
         { class: i.severity },
@@ -111,31 +123,115 @@ function renderPreview(p) {
       );
     }),
   );
-
-  $("units").replaceChildren(
-    ...p.units.map((u) =>
-      el(
-        "tr",
-        {},
-        el("td", {}, u.number),
-        el("td", {}, el("span", { class: u.kind === "GROUP_SET" ? "tag group" : "tag" }, u.kind === "GROUP_SET" ? "題組" : "Single")),
-        el("td", {}, u.slots.length),
-        el(
-          "td",
-          {},
-          u.slots
-            .map((s) => (u.kind === "GROUP_SET" ? `（${s.subPart}）` : "") + `${p.tabTitle}!${s.a1Ref}`)
-            .join("  "),
-        ),
-      ),
-    ),
-  );
+  $("units").replaceChildren(...unitRows(p.units, p.tabTitle));
   $("preview-section").classList.remove("hidden");
-  onPreviewRendered(p);
+  resetConfirm();
 }
 
-// Hook for the confirm step (US2).
-function onPreviewRendered(_p) {}
+// --- Confirm (US2) ------------------------------------------------------------------------
+
+function resetConfirm() {
+  const p = state.preview;
+  hideMessage($("confirm-message"));
+  $("ack-warnings").checked = false;
+  $("ack-row").classList.toggle("hidden", !p || p.totals.warnings === 0);
+  updateConfirmButton();
+}
+
+function updateConfirmButton() {
+  const p = state.preview;
+  const hint = $("confirm-hint");
+  let ok = Boolean(p);
+  if (p && !p.canConfirm) {
+    ok = false;
+    hint.textContent = "Fix the errors in the sheet, then refresh the preview.";
+  } else if (p && p.totals.warnings > 0 && !$("ack-warnings").checked) {
+    ok = false;
+    hint.textContent = "Acknowledge the warnings to continue.";
+  } else {
+    hint.textContent = "";
+  }
+  $("confirm-button").disabled = !ok;
+}
+
+async function confirmCreate() {
+  const p = state.preview;
+  const groupCount = Number($("group-count").value);
+  hideMessage($("confirm-message"));
+  if (!Number.isInteger(groupCount) || groupCount < 2 || groupCount > 12) {
+    showMessage($("confirm-message"), "Choose between 2 and 12 groups.");
+    return;
+  }
+  $("confirm-button").disabled = true;
+  try {
+    const activity = await api("POST", "/api/teacher/activities", {
+      url: state.url,
+      sheetId: p.sheetId,
+      groupCount,
+      fingerprint: p.fingerprint,
+      acknowledgeWarnings: $("ack-warnings").checked,
+    });
+    showCurrent(activity); // the WebSocket push will confirm this shortly
+  } catch (err) {
+    if ((err.code === "preview_changed" || err.code === "import_errors") && err.details.preview) {
+      renderPreview(err.details.preview);
+    }
+    showApiError($("confirm-message"), err);
+    if (err.code !== "preview_changed" && err.code !== "import_errors") updateConfirmButton();
+  }
+}
+
+// --- Current activity (driven by /ws/teacher) ----------------------------------------------
+
+function showCurrent(activity) {
+  state.current = activity;
+  const hasCurrent = Boolean(activity);
+  $("current-section").classList.toggle("hidden", !hasCurrent);
+  $("import-section").classList.toggle("hidden", hasCurrent);
+  if (hasCurrent) $("preview-section").classList.add("hidden");
+  if (!hasCurrent) return;
+  $("current-title").textContent = activity.title;
+  const phase = $("current-phase");
+  phase.textContent = activity.phase;
+  phase.className = `tag ${activity.phase}`;
+  $("current-meta").textContent =
+    `${activity.groupCount} groups · ${activity.totals.units} questions · ${activity.totals.slots} answer slots · imported ${activity.importedAt}`;
+  $("current-units").replaceChildren(...unitRows(activity.units, activity.source.tabTitle));
+}
+
+async function onActivityState(summary) {
+  if (!summary) {
+    showCurrent(null);
+    return;
+  }
+  try {
+    showCurrent(await api("GET", `/api/teacher/activities/${summary.id}`));
+  } catch (err) {
+    showApiError($("current-message"), err);
+  }
+}
+
+function connectLive(delay = 500) {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${location.host}/ws/teacher`);
+  ws.addEventListener("open", () => {
+    $("live-status").textContent = "Live updates connected.";
+    delay = 500;
+  });
+  ws.addEventListener("message", (ev) => {
+    let msg;
+    try {
+      msg = JSON.parse(ev.data);
+    } catch {
+      return;
+    }
+    if (msg.type === "activity.state") onActivityState(msg.activity);
+  });
+  ws.addEventListener("close", () => {
+    $("live-status").textContent = "Live updates disconnected — reconnecting…";
+    setTimeout(() => connectLive(Math.min(delay * 2, 10000)), delay);
+  });
+}
 
 // --- Wiring -----------------------------------------------------------------------------
 
@@ -151,3 +247,12 @@ $("tab-select").addEventListener("change", (ev) => {
 $("refresh-preview").addEventListener("click", () => {
   loadPreview($("tab-select").value).catch((err) => showApiError($("import-message"), err));
 });
+
+$("ack-warnings").addEventListener("change", updateConfirmButton);
+
+$("confirm-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  confirmCreate();
+});
+
+connectLive();

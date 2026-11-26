@@ -3,6 +3,7 @@
 from pydantic import BaseModel
 
 from quizbuzzer import db
+from quizbuzzer.realtime.hub import RealtimeHub
 from quizbuzzer.services.sheets_adapter import (
     InvalidSheetUrl,
     SheetNotFound,
@@ -13,7 +14,7 @@ from quizbuzzer.services.sheets_adapter import (
 
 def test_app_starts_and_creates_schema(client, db_path, fake_adapter, app):
     assert app.state.adapter is fake_adapter
-    assert app.state.hub is None
+    assert isinstance(app.state.hub, RealtimeHub) and len(app.state.hub) == 0
     conn = db.connect(db_path)
     try:
         names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master")}

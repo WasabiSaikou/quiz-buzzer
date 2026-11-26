@@ -201,7 +201,7 @@ preview.
 
 ### Tests for User Story 2 (write first, observe failing) ⚠️
 
-- [ ] T029 [P] [US2] Add the create cases to `tests/unit/test_activity_service.py`:
+- [X] T029 [P] [US2] Add the create cases to `tests/unit/test_activity_service.py`:
   - **Success (US2 AS1):** `create_from_import` stores exactly the re-parsed units and slots, with phase DRAFT, the chosen group count, the title format and source fields (`data-model.md › Activity.title`, `› Activity.sourceSheetId`, `› Activity.sourceTabTitle`), and server-clock `createdAt` = `importedAt` (`data-model.md › Activity.createdAt`).
   - **Refusals:**
     - group count 1, 13 or a non-int raises `InvalidGroupCount` (FR-019, `data-model.md › Activity.groupCount`, US2 AS4);
@@ -212,12 +212,12 @@ preview.
   - **Other activities:** CLOSED activities exist and stay byte-identical after a create (US2 AS7).
   - **Atomicity:** a failure injected after the unit inserts leaves zero rows (FR-023).
   - **Reads:** `get_current_activity` returns `None` or the activity; `get_activity(id)` raises not-found for an unknown id.
-- [ ] T030 [P] [US2] Write `tests/integration/test_one_current_activity_concurrency.py`. Two threads, each with its own `ActivityService` connection to the same file DB, call `create_from_import` simultaneously behind a `threading.Barrier`. Exactly one succeeds, the other gets `CurrentActivityExists`, and `SELECT count(*) … WHERE phase IN ('DRAFT','OPEN')` = 1. Also assert that a raw second DRAFT `INSERT` that bypasses the service fails on the `one_current_activity` index (research R7).
-- [ ] T031 [P] [US2] Add the create API cases to `tests/integration/test_import_api.py`:
+- [X] T030 [P] [US2] Write `tests/integration/test_one_current_activity_concurrency.py`. Two threads, each with its own `ActivityService` connection to the same file DB, call `create_from_import` simultaneously behind a `threading.Barrier`. Exactly one succeeds, the other gets `CurrentActivityExists`, and `SELECT count(*) … WHERE phase IN ('DRAFT','OPEN')` = 1. Also assert that a raw second DRAFT `INSERT` that bypasses the service fails on the `one_current_activity` index (research R7).
+- [X] T031 [P] [US2] Add the create API cases to `tests/integration/test_import_api.py`:
   - `POST /api/teacher/activities` gives 201 with the `Activity` shape;
   - error statuses: 422 `invalid_group_count`, 422 `import_errors`, 422 `warnings_not_acknowledged`, 409 `preview_changed` with `details.preview`, 409 `current_activity_exists` with `details.activity`;
   - `GET /api/teacher/activities/current` returns `{activity: null}` or the activity, and `GET /api/teacher/activities/{id}` returns the activity or 404.
-- [ ] T032 [P] [US2] Write `tests/integration/test_ws_teacher.py` against `contracts/websocket.md`:
+- [X] T032 [P] [US2] Write `tests/integration/test_ws_teacher.py` against `contracts/websocket.md`:
   - on connect, `/ws/teacher` immediately receives `activity.state` (`null` when there is none);
   - after `POST /api/teacher/activities`, every connected teacher socket (two sockets) receives `activity.state` with the summary shape;
   - client frames are ignored;
@@ -225,12 +225,12 @@ preview.
 
 ### Implementation for User Story 2
 
-- [ ] T033 [US2] Add the activity queries to `src/quizbuzzer/db.py`: `insert_activity`, `insert_units_and_slots`, `find_current_activity`, `get_activity_with_units` (ordered by `position`, then `sub_part`) and `list_closed_activity_ids` (for tests). Column mapping per `data-model.md › Activity`, `› QuestionUnit` and `› AnswerSlot`. Timestamps are ISO-8601 UTC from the server clock (`data-model.md › Activity.createdAt`, `› Activity.importedAt`).
-- [ ] T034 [US2] Implement `src/quizbuzzer/realtime/hub.py` `RealtimeHub`:
+- [X] T033 [US2] Add the activity queries to `src/quizbuzzer/db.py`: `insert_activity`, `insert_units_and_slots`, `find_current_activity`, `get_activity_with_units` (ordered by `position`, then `sub_part`) and `list_closed_activity_ids` (for tests). Column mapping per `data-model.md › Activity`, `› QuestionUnit` and `› AnswerSlot`. Timestamps are ISO-8601 UTC from the server clock (`data-model.md › Activity.createdAt`, `› Activity.importedAt`).
+- [X] T034 [US2] Implement `src/quizbuzzer/realtime/hub.py` `RealtimeHub`:
   - `connect(ws)`, `disconnect(ws)`, `async broadcast(message)` (skips and drops dead sockets);
   - `publish_from_thread(message)` using `anyio.from_thread.run` (research R8);
   - `activity_state_message(activity | None)` building the `contracts/websocket.md` summary.
-- [ ] T035 [US2] In `src/quizbuzzer/services/activity_service.py`, define the exceptions `InvalidGroupCount`, `ImportHasErrors`, `PreviewChanged`, `WarningsNotAcknowledged` and `CurrentActivityExists` (plan › Diagram Blueprint). Then implement `create_from_import(url, sheet_id, group_count, fingerprint, acknowledge_warnings)` following `diagrams/001-seq-confirm-create.puml`:
+- [X] T035 [US2] In `src/quizbuzzer/services/activity_service.py`, define the exceptions `InvalidGroupCount`, `ImportHasErrors`, `PreviewChanged`, `WarningsNotAcknowledged` and `CurrentActivityExists` (plan › Diagram Blueprint). Then implement `create_from_import(url, sheet_id, group_count, fingerprint, acknowledge_warnings)` following `diagrams/001-seq-confirm-create.puml`:
   1. Validate the group count (`data-model.md › Activity.groupCount`).
   2. Re-read the sheet and re-parse it; never trust client-sent cells (research R6).
   3. Check, in the diagram's order: errors (`ImportHasErrors`), then the fingerprint (`PreviewChanged`), then the warning acknowledgement (`WarningsNotAcknowledged`).
@@ -238,9 +238,9 @@ preview.
   5. Commit, then `hub.publish_from_thread(activity.state)`. Skip the publish when `hub is None`, so unit tests can run without a hub.
 
   Also implement `get_current_activity()` and `get_activity(id)`. T029 and T030 must pass.
-- [ ] T036 [US2] Implement `POST /api/teacher/activities`, `GET /api/teacher/activities/current` and `GET /api/teacher/activities/{id}` in `src/quizbuzzer/api/teacher_routes.py`. Add handlers for the new service exceptions in `src/quizbuzzer/main.py`, mapped per `contracts/rest-api.md › Error envelope`. T031 must pass.
-- [ ] T037 [US2] Implement `src/quizbuzzer/api/ws_routes.py` `/ws/teacher`: accept the connection, register it with `RealtimeHub`, send the current `activity.state` from the DB, ignore incoming frames, and unregister on disconnect. Create the hub in `create_app` (`src/quizbuzzer/main.py`) and pass it to `ActivityService`. T032 must pass.
-- [ ] T038 [US2] Extend `src/quizbuzzer/static/teacher.html` and `teacher.js` with:
+- [X] T036 [US2] Implement `POST /api/teacher/activities`, `GET /api/teacher/activities/current` and `GET /api/teacher/activities/{id}` in `src/quizbuzzer/api/teacher_routes.py`. Add handlers for the new service exceptions in `src/quizbuzzer/main.py`, mapped per `contracts/rest-api.md › Error envelope`. T031 must pass.
+- [X] T037 [US2] Implement `src/quizbuzzer/api/ws_routes.py` `/ws/teacher`: accept the connection, register it with `RealtimeHub`, send the current `activity.state` from the DB, ignore incoming frames, and unregister on disconnect. Create the hub in `create_app` (`src/quizbuzzer/main.py`) and pass it to `ActivityService`. T032 must pass.
+- [X] T038 [US2] Extend `src/quizbuzzer/static/teacher.html` and `teacher.js` with:
   - a group-count number input prefilled with 4, range 2–12 (spec Assumptions); the server is still authoritative;
   - a confirm button disabled while `canConfirm` is false, and a warnings acknowledgement checkbox that is required when warnings exist;
   - handling for `preview_changed`, which re-renders `details.preview`, and for `current_activity_exists`, which names the activity and its phase and suggests re-import (DRAFT) or closing it (OPEN);

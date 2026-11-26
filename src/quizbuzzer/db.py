@@ -7,9 +7,11 @@ activities, units and slots are added by the user-story tasks.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+
+from quizbuzzer.models import Activity, AnswerSlot, ParsedUnit, Phase, QuestionUnit, UnitKind
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS activities (
@@ -69,6 +71,106 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
 def init_schema(conn: sqlite3.Connection) -> None:
     """Create the 001 tables and index if missing (idempotent)."""
     conn.executescript(SCHEMA)
+
+
+# --- Activity queries (data-model.md › Activity, QuestionUnit, AnswerSlot) ------------------
+
+
+def insert_activity(
+    conn: sqlite3.Connection,
+    *,
+    title: str,
+    phase: str,
+    group_count: int,
+    spreadsheet_id: str,
+    sheet_id: int,
+    tab_title: str,
+    created_at: str,
+    imported_at: str,
+) -> int:
+    cur = conn.execute(
+        "INSERT INTO activities (title, phase, group_count, source_spreadsheet_id, "
+        "source_sheet_id, source_tab_title, created_at, imported_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (title, phase, group_count, spreadsheet_id, sheet_id, tab_title, created_at, imported_at),
+    )
+    return int(cur.lastrowid)
+
+
+def insert_units_and_slots(
+    conn: sqlite3.Connection, activity_id: int, units: Sequence[ParsedUnit]
+) -> None:
+    """Insert units in sheet order (position = index) and their slots."""
+    for position, unit in enumerate(units):
+        cur = conn.execute(
+            "INSERT INTO question_units (activity_id, number, kind, source_row, position) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (activity_id, unit.number, unit.kind.value, unit.source_row, position),
+        )
+        unit_id = cur.lastrowid
+        conn.executemany(
+            "INSERT INTO answer_slots (unit_id, sub_part, cell_row, cell_column, a1_ref) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [(unit_id, s.sub_part, s.row, s.column, s.a1_ref) for s in unit.slots],
+        )
+
+
+def find_current_activity(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    """The single DRAFT/OPEN activity (id, title, phase), if any."""
+    return conn.execute(
+        "SELECT id, title, phase FROM activities WHERE phase IN ('DRAFT', 'OPEN') "
+        "ORDER BY id LIMIT 1"
+    ).fetchone()
+
+
+def get_activity_with_units(conn: sqlite3.Connection, activity_id: int) -> Activity | None:
+    row = conn.execute("SELECT * FROM activities WHERE id = ?", (activity_id,)).fetchone()
+    if row is None:
+        return None
+    slots_by_unit: dict[int, list[AnswerSlot]] = {}
+    for s in conn.execute(
+        "SELECT s.* FROM answer_slots s JOIN question_units u ON s.unit_id = u.id "
+        "WHERE u.activity_id = ? ORDER BY u.position, s.id",
+        (activity_id,),
+    ):
+        slots_by_unit.setdefault(s["unit_id"], []).append(
+            AnswerSlot(
+                id=s["id"],
+                sub_part=s["sub_part"],
+                cell_row=s["cell_row"],
+                cell_column=s["cell_column"],
+                a1_ref=s["a1_ref"],
+            )
+        )
+    units = tuple(
+        QuestionUnit(
+            id=u["id"],
+            number=u["number"],
+            kind=UnitKind(u["kind"]),
+            source_row=u["source_row"],
+            position=u["position"],
+            slots=tuple(slots_by_unit.get(u["id"], ())),
+        )
+        for u in conn.execute(
+            "SELECT * FROM question_units WHERE activity_id = ? ORDER BY position", (activity_id,)
+        )
+    )
+    return Activity(
+        id=row["id"],
+        title=row["title"],
+        phase=Phase(row["phase"]),
+        group_count=row["group_count"],
+        source_spreadsheet_id=row["source_spreadsheet_id"],
+        source_sheet_id=row["source_sheet_id"],
+        source_tab_title=row["source_tab_title"],
+        created_at=row["created_at"],
+        imported_at=row["imported_at"],
+        units=units,
+    )
+
+
+def list_closed_activity_ids(conn: sqlite3.Connection) -> list[int]:
+    return [r[0] for r in conn.execute("SELECT id FROM activities WHERE phase = 'CLOSED' ORDER BY id")]
 
 
 @contextmanager

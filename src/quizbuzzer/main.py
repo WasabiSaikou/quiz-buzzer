@@ -17,10 +17,20 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from quizbuzzer import db
-from quizbuzzer.api import teacher_routes
+from quizbuzzer.api import teacher_routes, ws_routes
+from quizbuzzer.api.schemas import PreviewResponse
 from quizbuzzer.config import ConfigError, Settings, load_settings
 from quizbuzzer.models import SpreadsheetInfo, TabData
-from quizbuzzer.services.activity_service import ActivityService
+from quizbuzzer.realtime.hub import RealtimeHub
+from quizbuzzer.services.activity_service import (
+    ActivityNotFound,
+    ActivityService,
+    CurrentActivityExists,
+    ImportHasErrors,
+    InvalidGroupCount,
+    PreviewChanged,
+    WarningsNotAcknowledged,
+)
 from quizbuzzer.services.sheets_adapter import (
     InvalidSheetUrl,
     SheetNotFound,
@@ -129,6 +139,36 @@ def _register_core_errors(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, validation_handler)
 
 
+def _preview_details(exc: Exception) -> dict[str, Any]:
+    preview = PreviewResponse.from_preview(exc.preview)  # type: ignore[attr-defined]
+    return {"preview": preview.model_dump(mode="json", by_alias=True)}
+
+
+def _register_activity_errors(app: FastAPI) -> None:
+    """US2 service exceptions -> contracts/rest-api.md › Error envelope."""
+    register_error(app, InvalidGroupCount, 422, "invalid_group_count", lambda e: str(e))
+    register_error(app, ImportHasErrors, 422, "import_errors", lambda e: str(e), _preview_details)
+    register_error(
+        app, WarningsNotAcknowledged, 422, "warnings_not_acknowledged", lambda e: str(e)
+    )
+    register_error(app, PreviewChanged, 409, "preview_changed", lambda e: str(e), _preview_details)
+    register_error(
+        app,
+        CurrentActivityExists,
+        409,
+        "current_activity_exists",
+        lambda e: str(e),
+        lambda e: {
+            "activity": {
+                "id": e.activity_id,  # type: ignore[attr-defined]
+                "title": e.title,  # type: ignore[attr-defined]
+                "phase": e.phase.value,  # type: ignore[attr-defined]
+            }
+        },
+    )
+    register_error(app, ActivityNotFound, 404, "not_found", lambda e: str(e))
+
+
 def create_app(
     adapter: SheetsAdapter | None = None,
     db_path: str | Path | None = None,
@@ -147,11 +187,13 @@ def create_app(
     app.state.settings = settings
     app.state.db_path = db_path
     app.state.adapter = adapter if adapter is not None else LazyGoogleSheetsAdapter(settings)
-    app.state.hub = None  # RealtimeHub is wired in by US2 (T037)
+    app.state.hub = RealtimeHub()
     app.state.service = ActivityService(app.state.adapter, db_path, app.state.hub)
 
     _register_core_errors(app)
+    _register_activity_errors(app)
     app.include_router(teacher_routes.router)
+    app.include_router(ws_routes.router)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

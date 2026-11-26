@@ -119,3 +119,116 @@ def test_import_never_writes_to_sheet(client, fake_adapter):
     preview(client, SHIFTED, 918273645)
     preview(client, GROUP, 0)
     assert fake_adapter.snapshot() == before
+
+
+# --- US2: POST /api/teacher/activities, GET current / {id} ---------------------------------
+
+WARNING_GRID = [["題號", "作答"], ["1", "答：______"], ["2", ""]]
+
+
+def slots_of(units):
+    return [
+        (u["number"], u["kind"], u["sourceRow"], [(s["subPart"], s["a1Ref"], s["row"], s["column"]) for s in u["slots"]])
+        for u in units
+    ]
+
+
+def create(client, url=GROUP, sheet_id=0, group_count=6, ack=False, fingerprint=None):
+    if fingerprint is None:
+        fingerprint = preview(client, url, sheet_id)["fingerprint"]
+    return client.post(
+        "/api/teacher/activities",
+        json={
+            "url": url,
+            "sheetId": sheet_id,
+            "groupCount": group_count,
+            "fingerprint": fingerprint,
+            "acknowledgeWarnings": ack,
+        },
+    )
+
+
+def test_create_activity_201(client):
+    p = preview(client, GROUP, 0)
+    r = create(client, fingerprint=p["fingerprint"])
+    assert r.status_code == 201, r.text
+    a = r.json()
+    assert a["phase"] == "DRAFT" and a["groupCount"] == 6
+    assert a["title"] == "template_group – Sheet1"
+    assert a["source"] == {"spreadsheetId": "template_group", "sheetId": 0, "tabTitle": "Sheet1"}
+    assert a["createdAt"] == a["importedAt"]
+    assert a["totals"] == {"units": 4, "slots": 6}
+    assert slots_of(a["units"]) == slots_of(p["units"])
+    assert [u["position"] for u in a["units"]] == [0, 1, 2, 3]
+    assert all(isinstance(u["id"], int) for u in a["units"])
+    assert all(isinstance(s["id"], int) for u in a["units"] for s in u["slots"])
+
+
+@pytest.mark.parametrize("bad", [1, 13, "six", None])
+def test_create_invalid_group_count_422(client, bad):
+    r = create(client, group_count=bad)
+    assert r.status_code == 422
+    err = r.json()["error"]
+    assert err["code"] == "invalid_group_count"
+    assert "2" in err["message"] and "12" in err["message"]
+
+
+def test_create_import_errors_422(client, fake_adapter):
+    fake_adapter.replace_tab("template_single", 0, NO_HEADER_GRID)
+    r = create(client, SINGLE)
+    assert r.status_code == 422
+    err = r.json()["error"]
+    assert err["code"] == "import_errors"
+    assert err["details"]["preview"]["canConfirm"] is False
+
+
+def test_create_warnings_not_acknowledged_422(client, fake_adapter):
+    fake_adapter.replace_tab("template_single", 0, WARNING_GRID)
+    r = create(client, SINGLE, ack=False)
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "warnings_not_acknowledged"
+    assert create(client, SINGLE, ack=True).status_code == 201
+
+
+def test_create_preview_changed_409(client, fake_adapter):
+    fp = preview(client, SINGLE, 0)["fingerprint"]
+    grid = fake_adapter.read_tab("template_single", 0).grid + [["", "7", "新題目"]]
+    fake_adapter.replace_tab("template_single", 0, grid)
+    r = create(client, SINGLE, fingerprint=fp)
+    assert r.status_code == 409
+    err = r.json()["error"]
+    assert err["code"] == "preview_changed"
+    assert err["details"]["preview"]["totals"]["units"] == 7
+    assert client.get("/api/teacher/activities/current").json() == {"activity": None}
+
+
+def test_create_when_current_exists_409(client):
+    first = create(client).json()
+    r = create(client, SINGLE)
+    assert r.status_code == 409
+    err = r.json()["error"]
+    assert err["code"] == "current_activity_exists"
+    assert err["details"]["activity"] == {"id": first["id"], "title": first["title"], "phase": "DRAFT"}
+    assert "re-import" in err["message"].lower()
+
+
+def test_get_current_and_by_id(client):
+    assert client.get("/api/teacher/activities/current").json() == {"activity": None}
+    created = create(client).json()
+    assert client.get("/api/teacher/activities/current").json() == {"activity": created}
+    assert client.get(f"/api/teacher/activities/{created['id']}").json() == created
+    r = client.get("/api/teacher/activities/999")
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "not_found"
+
+
+def test_create_missing_fields_uses_envelope(client):
+    r = client.post("/api/teacher/activities", json={"url": GROUP})
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "invalid_request"
+
+
+def test_create_never_writes_to_sheet(client, fake_adapter):
+    before = fake_adapter.snapshot()
+    assert create(client).status_code == 201
+    assert fake_adapter.snapshot() == before

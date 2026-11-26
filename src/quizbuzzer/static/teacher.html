@@ -40,6 +40,11 @@
     ul.issues li.error { background: var(--errbg); color: var(--err); }
     ul.issues li.warning { background: var(--warnbg); color: var(--warn); }
     ul.issues .where { font-size: 12px; opacity: .85; }
+    form.confirm { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+    label.check { display: flex; gap: 6px; align-items: center; font-weight: 400; margin: 0 0 6px; }
+    .current-head { display: flex; gap: 10px; align-items: center; margin: 0 0 4px; }
+    .tag.DRAFT { background: #fff8c5; border-color: #eac54f; }
+    .tag.OPEN { background: #dafbe1; border-color: #4ac26b; }
   </style>
 </head>
 <body>
@@ -77,7 +82,38 @@
         <thead><tr><th>題號</th><th>Type</th><th>Sub-parts</th><th>Answer cells</th></tr></thead>
         <tbody id="units"></tbody>
       </table>
+
+      <form id="confirm-form" class="confirm">
+        <div id="confirm-message" class="banner hidden" role="alert"></div>
+        <div class="row">
+          <div>
+            <label for="group-count">Groups (2–12)</label>
+            <input id="group-count" type="number" min="2" max="12" step="1" value="4" required>
+          </div>
+          <label id="ack-row" class="check hidden">
+            <input id="ack-warnings" type="checkbox"> I have read the warnings above
+          </label>
+          <button type="submit" id="confirm-button" class="primary" disabled>Create DRAFT activity</button>
+        </div>
+        <p id="confirm-hint" class="muted"></p>
+      </form>
     </section>
+
+    <section id="current-section" class="hidden" aria-live="polite">
+      <h2>Current activity</h2>
+      <div id="current-message" class="banner hidden" role="alert"></div>
+      <p class="current-head">
+        <strong id="current-title"></strong>
+        <span id="current-phase" class="tag"></span>
+      </p>
+      <p class="muted" id="current-meta"></p>
+      <table>
+        <thead><tr><th>題號</th><th>Type</th><th>Sub-parts</th><th>Answer cells</th></tr></thead>
+        <tbody id="current-units"></tbody>
+      </table>
+    </section>
+
+    <p id="live-status" class="muted">Connecting…</p>
   </main>
   <script type="module" src="/static/teacher.js"></script>
 </body>

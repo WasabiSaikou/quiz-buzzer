@@ -8,7 +8,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
-from quizbuzzer.api.schemas import ImportTabsRequest, PreviewRequest, PreviewResponse, TabsResponse
+from quizbuzzer.api.schemas import (
+    ActivityResponse,
+    CreateActivityRequest,
+    CurrentActivityResponse,
+    ImportTabsRequest,
+    PreviewRequest,
+    PreviewResponse,
+    TabsResponse,
+)
 from quizbuzzer.services.activity_service import ActivityService
 
 router = APIRouter(prefix="/api/teacher")
@@ -27,3 +35,25 @@ def import_tabs(body: ImportTabsRequest, request: Request) -> TabsResponse:
 @router.post("/import/preview", response_model=PreviewResponse)
 def import_preview(body: PreviewRequest, request: Request) -> PreviewResponse:
     return PreviewResponse.from_preview(_service(request).preview_import(body.url, body.sheet_id))
+
+
+@router.post("/activities", response_model=ActivityResponse, status_code=201)
+def create_activity(body: CreateActivityRequest, request: Request) -> ActivityResponse:
+    activity = _service(request).create_from_import(
+        body.url, body.sheet_id, body.group_count, body.fingerprint, body.acknowledge_warnings
+    )
+    return ActivityResponse.from_activity(activity)
+
+
+# Declared before /activities/{activity_id} so "current" is not parsed as an id.
+@router.get("/activities/current", response_model=CurrentActivityResponse)
+def current_activity(request: Request) -> CurrentActivityResponse:
+    activity = _service(request).get_current_activity()
+    return CurrentActivityResponse(
+        activity=ActivityResponse.from_activity(activity) if activity else None
+    )
+
+
+@router.get("/activities/{activity_id}", response_model=ActivityResponse)
+def get_activity(activity_id: int, request: Request) -> ActivityResponse:
+    return ActivityResponse.from_activity(_service(request).get_activity(activity_id))

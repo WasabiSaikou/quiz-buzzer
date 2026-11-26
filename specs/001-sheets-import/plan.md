@@ -39,7 +39,7 @@ The diagrams are the primary blueprint. The plan's module and class names match 
 | URL parsing | `services/sheets_url.py`: `parse_spreadsheet_url`, called by `ActivityService` before any adapter call |
 | SQLite store | `db.py` (connection, schema, queries) and the DB file at `QUIZBUZZER_DB_PATH` |
 | Domain classes | `models.py`: `Phase`, `UnitKind`, `Activity`, `QuestionUnit`, `AnswerSlot` (+ transient `SpreadsheetInfo`, `TabData`, `ImportPreview`, `Issue`, …) |
-| Service exceptions (sequence diagrams) | `services/activity_service.py`: `InvalidGroupCount`, `ImportHasErrors`, `PreviewChanged`, `WarningsNotAcknowledged`, `CurrentActivityExists`, `ReimportRefused` |
+| Service exceptions (sequence diagrams) | `services/activity_service.py`: `InvalidGroupCount`, `ImportHasErrors`, `PreviewChanged`, `WarningsNotAcknowledged`, `CurrentActivityExists`, `ReimportRefused`; plus `ActivityNotFound` (404 for `GET /activities/{id}`, not drawn in the sequence diagrams) |
 
 **Diagram changes made during planning** (re-rendered 2026-11-26):
 - The parser moved out of the Sheets adapter and is now called by `ActivityService`. This keeps
