@@ -1,4 +1,4 @@
-"""Domain types (diagrams/domain-class.puml; specs/001-sheets-import/data-model.md).
+"""Domain types (diagrams/domain-class.puml; 001 and 002 data-model.md).
 
 Pure data: no I/O. Persisted entities mirror the diagram (camelCase there, snake_case here).
 Transient types carry import results between the adapter, parser, service and API.
@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal
+from typing import Literal, NamedTuple
 
 
 class Phase(str, Enum):
-    """Activity.phase. Feature 001 only ever writes DRAFT."""
+    """Activity.phase: DRAFT -> OPEN -> CLOSED, forward only (002 FR-005)."""
 
     DRAFT = "DRAFT"
     OPEN = "OPEN"
@@ -64,6 +64,56 @@ class Activity:
     created_at: str  # ISO-8601 UTC, server clock
     imported_at: str  # ISO-8601 UTC, updated on re-import
     units: tuple[QuestionUnit, ...] = ()
+
+
+# --- Feature 002 entities (specs/002-live-buzz-activity/data-model.md) -------------------
+# A group is a value (activity, group_number), not an entity (002 research R4).
+
+
+@dataclass(frozen=True)
+class Participant:
+    """One student's membership in one group of one activity (data-model.md › Participant)."""
+
+    id: int
+    activity_id: int
+    group_number: int  # 1..Activity.group_count
+    display_name: str  # trimmed, 1..20 characters; student data: never logged
+    joined_at: str  # ISO-8601 UTC, server clock
+    # token_hash is deliberately not carried here: only db.py and the service see it.
+
+
+@dataclass(frozen=True)
+class SubmissionAnswer:
+    slot_id: int
+    sub_part: int
+    text: str  # trimmed, 1..200 characters; never logged
+
+
+@dataclass(frozen=True)
+class Submission:
+    """One group's answer to one unit (data-model.md › Submission)."""
+
+    id: int
+    unit_id: int
+    unit_number: int
+    group_number: int
+    participant_id: int
+    submitted_by: str  # the submitter's display name
+    rank: int  # 1 = winner; assigned by the server in arrival order (Constitution I)
+    received_at: str  # ISO-8601 UTC with milliseconds; display and 003 CSV only
+    answers: tuple[SubmissionAnswer, ...] = ()
+
+    @property
+    def is_winner(self) -> bool:
+        return self.rank == 1
+
+
+class StudentKey(NamedTuple):
+    """Resolved once when a /ws/student socket connects (data-model.md › StudentKey)."""
+
+    activity_id: int
+    participant_id: int
+    group_number: int
 
 
 # --- Transient types (not stored) -----------------------------------------------------

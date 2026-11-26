@@ -17,21 +17,27 @@ section below records a design decision that the spec left open.
     - `TeacherSessions`, an in-memory set of tokens guarded by a lock.
     - `create(passcode)`, which compares the passcode with `hmac.compare_digest` (on UTF-8 bytes)
       and returns `secrets.token_urlsafe(32)`.
-    - The FastAPI dependency `require_teacher`.
+    - `require_teacher(conn)`, which raises `TeacherRequired` without a valid cookie.
   - The token goes in the cookie `qb_teacher` with `HttpOnly`, `SameSite=Strict` and `Path=/`.
     It has no `Max-Age`, so it is a browser-session cookie, and every token is lost on server
     restart (FR-003). The cookie is not `Secure`, because the app serves plain HTTP on the LAN.
-  - `require_teacher` is attached at router level:
-    `APIRouter(prefix="/api/teacher", dependencies=[Depends(require_teacher)])`. Every existing
-    001 route and every new 002 teacher route is covered, and a new route cannot forget it
-    (FR-002). `POST /api/teacher/session` lives on a separate `auth_routes` router without the
-    dependency.
+  - `require_teacher` runs in a pure ASGI middleware, `TeacherGuardMiddleware`, on every
+    request whose path is `/api/teacher` or starts with `/api/teacher/`, except
+    `POST /api/teacher/session` (which lives on its own `auth_routes` router). Every existing 001
+    route, every new 002 teacher route, and even an unknown `/api/teacher/…` path is covered, and a
+    new route cannot forget it (FR-002).
+    **Changed during implementation (2026-11-27)**: the plan attached `require_teacher` as a router
+    dependency (`APIRouter(..., dependencies=[Depends(require_teacher)])`). FastAPI parses a
+    malformed JSON body *before* router dependencies run, so such a request got 422
+    `invalid_request` (echoing field names) instead of 401. That breaks the contract rule that
+    the guard runs before body validation. The middleware runs before routing and body parsing,
+    so the rule holds, as `tests/integration/test_teacher_guard.py` checks for every route.
   - `/ws/teacher` checks the cookie before sending anything. If the cookie is invalid it accepts
     and immediately closes with code `4401`. Accepting first is needed, because Starlette cannot
     send a custom close code on a rejected upgrade.
   - Failure response: `401 teacher_required`, with the same body for every route and no
     `details`. A wrong passcode gives `401 wrong_passcode`.
-- **Rationale**: Router-level enforcement makes "student pages cannot call teacher actions"
+- **Rationale**: Prefix-level enforcement makes "student pages cannot call teacher actions"
   structural rather than per-route. A cookie, unlike a header token kept in JS, is sent
   automatically on WebSocket upgrades and never readable by page scripts (the passcode never
   reaches storage, FR-004). `SameSite=Strict` blocks cross-site form posts.

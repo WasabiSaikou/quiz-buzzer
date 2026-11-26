@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -12,6 +12,9 @@ from dotenv import load_dotenv
 DEFAULT_DB_PATH = "data/quizbuzzer.db"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
+
+
+PASSCODE_MISSING = "TEACHER_PASSCODE is not set in .env."
 
 
 class ConfigError(RuntimeError):
@@ -24,6 +27,9 @@ class Settings:
     db_path: Path
     host: str
     port: int
+    # Feature 002 (research R1): required; validated by load_settings() and create_app().
+    # repr=False: the passcode must never appear in logs or tracebacks (Principle VI).
+    teacher_passcode: str = field(default="", repr=False)
 
     @property
     def service_account_email(self) -> str:
@@ -57,9 +63,13 @@ def load_settings(env_file: str | os.PathLike[str] | None = ".env") -> Settings:
         port = int(port_text)
     except ValueError as exc:
         raise ConfigError("QUIZBUZZER_PORT must be an integer.") from exc
+    passcode = os.environ.get("TEACHER_PASSCODE", "").strip()
+    if not passcode:
+        raise ConfigError(PASSCODE_MISSING)
     return Settings(
         credentials_path=Path(creds) if creds else None,
         db_path=Path(os.environ.get("QUIZBUZZER_DB_PATH", "").strip() or DEFAULT_DB_PATH),
         host=os.environ.get("QUIZBUZZER_HOST", "").strip() or DEFAULT_HOST,
         port=port,
+        teacher_passcode=passcode,
     )

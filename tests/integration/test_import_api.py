@@ -276,7 +276,11 @@ def test_logs_never_contain_cell_text_or_credentials(
     from quizbuzzer.main import create_app
 
     key_path = tmp_path / f"key-{SENTINEL}.json"
-    settings = Settings(credentials_path=key_path, db_path=db_path, host="127.0.0.1", port=8000)
+    passcode = f"pass-{SENTINEL}"
+    settings = Settings(
+        credentials_path=key_path, db_path=db_path, host="127.0.0.1", port=8000,
+        teacher_passcode=passcode,
+    )
     grid = [
         ["題號", "題目", "作答"],
         ["1", f"question text {SENTINEL}", f"答：{SENTINEL}"],  # -> slot_cell_has_text warning
@@ -294,6 +298,8 @@ def test_logs_never_contain_cell_text_or_credentials(
     url = "https://docs.google.com/spreadsheets/d/logcheck/edit"
     caplog.set_level(logging.DEBUG)
     with TestClient(create_app(adapter=fake_adapter, db_path=db_path, settings=settings)) as c:
+        c.post("/api/teacher/session", json={"passcode": "wrong"})  # 002: wrong attempt, then right
+        assert c.post("/api/teacher/session", json={"passcode": passcode}).status_code == 204
         c.post("/api/teacher/import/tabs", json={"url": url})
         p = c.post("/api/teacher/import/preview", json={"url": url, "sheetId": 0}).json()
         assert any(SENTINEL in i["message"] for i in p["issues"])  # the teacher does see it
@@ -315,6 +321,7 @@ def test_logs_never_contain_cell_text_or_credentials(
         text = record.getMessage()
         assert SENTINEL not in text, record.name
         assert str(key_path) not in text, record.name
+        assert passcode not in text, record.name  # 002 FR-004
 
 
 def test_preview_of_200_row_sheet_is_fast(client, fake_adapter):

@@ -36,11 +36,11 @@ The diagrams are the primary blueprint, and module and class names match them ex
 | Teacher UI | `static/teacher.html`, `teacher.js`: add the passcode form, Open / End / Cancel buttons with confirm dialogs, the dashboard and the closed view |
 | Student UI | **new** `static/student.html`, `student.js`, served at `GET /student`; `GET /` redirects there |
 | `api/auth_routes.py` | **new**: `POST /api/teacher/session` |
-| Teacher guard | **new** `api/auth.py`: `TeacherSessions` (`create(passcode)`, `is_valid(token)`), `require_teacher` dependency, `WrongPasscode`, `TeacherRequired` |
-| `api/teacher_routes.py` | router gets `dependencies=[Depends(require_teacher)]`; adds `POST /activities/{id}/open`, `POST /activities/{id}/end`, `DELETE /activities/{id}`, `GET /activities/{id}/dashboard`; `GET /activities/current` returns the displayed activity |
+| Teacher guard | **new** `api/auth.py`: `TeacherSessions` (`create(passcode)`, `is_valid(token)`), `require_teacher(conn)`, `TeacherGuardMiddleware` (pure ASGI), `WrongPasscode`, `TeacherRequired` |
+| `api/teacher_routes.py` | guarded by `api/auth.py: TeacherGuardMiddleware` (prefix `/api/teacher/`, except `/session`; research R1, changed from a router dependency during implementation); adds `POST /activities/{id}/open`, `POST /activities/{id}/end`, `DELETE /activities/{id}`, `GET /activities/{id}/dashboard`; `GET /activities/current` returns the displayed activity |
 | `api/student_routes.py` | **new**: `GET /api/student/state`, `POST /api/student/join`, `DELETE /api/student/membership`, `POST /api/student/submissions` |
 | `api/ws_routes.py` | `/ws/teacher` (cookie check → close 4401; on connect `activity.state` + `dashboard.state`); **new** `/ws/student` (`resolve_key` → register → `student.state`) |
-| Real-time channel | `realtime/hub.py: RealtimeHub`: `teachers: set`, `students: dict[WebSocket, StudentKey \| None]`, `send_many(pairs)`, `student_sockets(activity_id=None, group_number=None)`, `publish_from_thread` (kept); `StudentKey` NamedTuple |
+| Real-time channel | `realtime/hub.py: RealtimeHub`: `teachers: set`, `students: dict[WebSocket, StudentKey \| None]`, `send_many(pairs)`, `student_sockets(activity_id=None, group_number=None)`, `publish_from_thread(message)` (kept: broadcast to teachers, unchanged 001 signature), `send_from_thread(pairs)` (any socket list); helpers `student_state_message`, `dashboard_state_message`; `StudentKey` NamedTuple in `models.py` |
 | Activity service | `services/activity_service.py: ActivityService` + `open_activity`, `end_activity`, `cancel_activity`, `get_displayed_activity`, `get_dashboard`, `publish_teacher_state(activity_id)` (sends `activity.state` + `dashboard.state` to teacher sockets); exceptions `PhaseConflict`, `CancelRefused`; constructor takes `student_publisher` (= `ParticipationService.publish_student_states`) |
 | Participation service | **new** `services/participation_service.py: ParticipationService`: `resolve_key(token)`, `student_state(key)`, `join`, `leave`, `submit`, `publish_student_states()`, `publish_group_state(activity_id, group_number)`; constructor takes `teacher_publisher` (= `ActivityService.publish_teacher_state`), called after each successful join / leave / submit commit (the "PART → RT dashboard.state" arrows in `system-component`, `002-seq-join` and `002-seq-submit`); exceptions `InvalidJoin`, `JoinRefused`, `AlreadyJoined`, `NotAMember`, `GroupChangeRefused`, `InvalidAnswers`, `NotOpen`, `ActivityEnded`, `UnitNotFound`, `AlreadySubmitted` |
 | Visibility filter | **new** `services/visibility.py: student_view(activity, participant, members, own_submissions) -> dict` (pure); `validate_display_name`, `validate_answers` helpers live in `participation_service.py` |
@@ -155,7 +155,7 @@ src/quizbuzzer/
 ├── api/
 │   ├── auth.py                  + TeacherSessions, require_teacher
 │   ├── auth_routes.py           + POST /api/teacher/session
-│   ├── teacher_routes.py        ~ router dependency + open/end/cancel/dashboard
+│   ├── teacher_routes.py        ~ open/end/cancel/dashboard (guarded by TeacherGuardMiddleware)
 │   ├── student_routes.py        + /api/student/*
 │   ├── ws_routes.py             ~ /ws/teacher auth + snapshots; + /ws/student
 │   └── schemas.py               ~ request/response models (camelCase)

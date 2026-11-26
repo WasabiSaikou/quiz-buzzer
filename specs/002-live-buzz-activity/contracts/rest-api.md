@@ -8,8 +8,9 @@ All bodies are JSON (UTF-8), and fields are camelCase. Every non-2xx response us
 Routers:
 - `api/auth_routes.py`: `/api/teacher/session`. This is the only `/api/teacher/*` route without
   the teacher guard.
-- `api/teacher_routes.py`: prefix `/api/teacher`, with the router dependency
-  `Depends(require_teacher)`.
+- `api/teacher_routes.py`: prefix `/api/teacher`. Every request under `/api/teacher/` except
+  `POST /api/teacher/session` first passes `TeacherGuardMiddleware` (`api/auth.py`), before
+  routing and body parsing.
 - `api/student_routes.py`: prefix `/api/student`.
 
 Cookies (research R1, R2):

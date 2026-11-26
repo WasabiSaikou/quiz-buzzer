@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quiz Buzzer — Student</title>
+  <style>
+    :root { --fg:#1f2328; --muted:#59636e; --line:#d1d9e0; --bg:#fff; --soft:#f6f8fa;
+            --err:#b42318; --errbg:#fef3f2; --ok:#1a7f37; --okbg:#dafbe1; --accent:#0969da; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 system-ui, "Microsoft JhengHei", sans-serif; color: var(--fg); background: var(--soft); }
+    header { background: var(--bg); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; gap: 12px; align-items: center; }
+    header h1 { margin: 0; font-size: 18px; flex: 1; }
+    main { max-width: 720px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
+    section { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 16px 20px; }
+    h2 { margin: 0 0 12px; font-size: 17px; }
+    label { display: block; font-weight: 600; margin-bottom: 4px; }
+    input[type=text], select { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+    button { padding: 9px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); font: inherit; cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .muted { color: var(--muted); }
+    .hidden { display: none !important; }
+    .banner { padding: 10px 14px; border-radius: 6px; margin: 0 0 12px; white-space: pre-wrap; }
+    .banner.error { background: var(--errbg); color: var(--err); border: 1px solid #fecdca; }
+    .banner.info { background: var(--soft); border: 1px solid var(--line); }
+    .stack { display: grid; gap: 12px; }
+    .unit { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+    .unit h3 { margin: 0 0 8px; font-size: 16px; }
+    .unit.done { background: var(--okbg); border-color: #4ac26b; }
+    .slot { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .slot .k { min-width: 2.5em; font-weight: 600; }
+    .slot input { flex: 1; }
+    .answers { margin: 0; padding-left: 0; list-style: none; }
+    .members { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .members li { padding: 0 10px; border-radius: 12px; background: var(--soft); border: 1px solid var(--line); }
+    .group-badge { font-size: 28px; font-weight: 700; }
+    #conn { font-size: 13px; padding: 2px 10px; border-radius: 10px; background: var(--errbg); color: var(--err); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Quiz Buzzer（課堂搶答）</h1>
+    <span id="conn" class="hidden" role="status">Reconnecting…</span>
+  </header>
+  <main>
+    <div id="message" class="banner hidden" role="alert"></div>
+
+    <section id="screen-none" class="hidden">
+      <h2>No activity available yet</h2>
+      <p class="muted">Wait for your teacher. This page updates by itself.</p>
+    </section>
+
+    <section id="screen-join" class="hidden">
+      <h2>Join your group</h2>
+      <form id="join-form" class="stack">
+        <div>
+          <label for="join-group">Group</label>
+          <select id="join-group" required></select>
+        </div>
+        <div>
+          <label for="join-name">Your name</label>
+          <input id="join-name" type="text" maxlength="20" required autocomplete="nickname">
+        </div>
+        <div><button class="primary" type="submit" id="join-button">Join</button></div>
+      </form>
+    </section>
+
+    <section id="screen-waiting" class="hidden">
+      <h2>Waiting for the teacher to open the activity</h2>
+      <p>You are in group <span id="waiting-group" class="group-badge"></span></p>
+      <p class="muted">Members of your group:</p>
+      <ul id="waiting-members" class="members"></ul>
+      <p><button type="button" id="change-group">Change group</button></p>
+    </section>
+
+    <section id="screen-answering" class="hidden">
+      <h2>Group <span id="answering-group"></span> — answer for your group</h2>
+      <ul id="answering-members" class="members"></ul>
+      <div id="units" class="stack" style="margin-top:12px"></div>
+    </section>
+
+    <section id="screen-closed" class="hidden">
+      <h2>The activity has ended</h2>
+      <p>Group <span id="closed-group"></span>. Your group's answers:</p>
+      <div id="closed-units" class="stack"></div>
+      <p id="closed-none" class="muted hidden">Your group did not submit any answers.</p>
+    </section>
+  </main>
+  <script src="/static/student.js"></script>
+</body>
+</html>

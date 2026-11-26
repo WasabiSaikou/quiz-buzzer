@@ -62,8 +62,8 @@ record: test id, date and failing output summary.
 
 **Purpose**: baseline and records.
 
-- [ ] T001 Run `uv run pytest` and confirm the 001 baseline (210 passed at commit `ae027be`). Add a `## Feature 002` section skeleton to `docs/verification.md` with three subsections: "Test-first record (002)" (table: test id, date, red output summary, green commit), "Manual verification (M11–M25)" (copy the table from `quickstart.md` §5 with empty Result/Evidence columns), and "Automated test runs"
-- [ ] T002 [P] Confirm that `.env.example` holds `TEACHER_PASSCODE=` with an empty value and a comment line above it ("Required. Passcode that unlocks /teacher. Never commit the real value."). Add the comment in `.env.example` if it is missing
+- [X] T001 Run `uv run pytest` and confirm the 001 baseline (210 passed at commit `ae027be`). Add a `## Feature 002` section skeleton to `docs/verification.md` with three subsections: "Test-first record (002)" (table: test id, date, red output summary, green commit), "Manual verification (M11–M25)" (copy the table from `quickstart.md` §5 with empty Result/Evidence columns), and "Automated test runs"
+- [X] T002 [P] Confirm that `.env.example` holds `TEACHER_PASSCODE=` with an empty value and a comment line above it ("Required. Passcode that unlocks /teacher. Never commit the real value."). Add the comment in `.env.example` if it is missing
 
 ---
 
@@ -83,30 +83,30 @@ record: test id, date and failing output summary.
 
 ### Tests for Foundational (write first, observe failing) ⚠️
 
-- [ ] T003 [P] Write `tests/unit/test_config.py`:
+- [X] T003 [P] Write `tests/unit/test_config.py`:
   - `load_settings()` with `TEACHER_PASSCODE` missing, empty or whitespace-only raises `ConfigError` whose message names `TEACHER_PASSCODE` and contains no value;
   - with a value set, `Settings.teacher_passcode` equals it;
   - `create_app(settings=Settings(..., teacher_passcode=""))` raises `ConfigError`.
 
   Use `monkeypatch.delenv` / `setenv` and `env_file=None` (research R1, FR-004).
-- [ ] T004 [P] Write `tests/unit/test_teacher_sessions.py` for `api/auth.py: TeacherSessions`:
+- [X] T004 [P] Write `tests/unit/test_teacher_sessions.py` for `api/auth.py: TeacherSessions`:
   - `create(wrong)` raises `WrongPasscode`;
   - `create(right)` returns a URL-safe token of at least 43 characters, and `is_valid(token)` is true;
   - `is_valid` is false for an unknown or empty token;
   - two `create` calls return different tokens, and both are valid at once (several tabs, FR-003);
   - a new `TeacherSessions` instance (a restart) does not accept old tokens;
   - the comparison uses `hmac.compare_digest` (monkeypatch it to record the call).
-- [ ] T005 [P] Write `tests/unit/test_visibility.py` for the pure `services/visibility.py: student_view(activity, participant, members, own_submissions)`. Build plain inputs, with no DB:
+- [X] T005 [P] Write `tests/unit/test_visibility.py` for the pure `services/visibility.py: student_view(activity, participant, members, own_submissions)`. Build plain inputs, with no DB:
   - assert every row of `contracts/rest-api.md › StudentState` › Rules: no activity; no membership; member in DRAFT; member in OPEN (units present with `unitId`, `number`, `kind`, `subParts`, in position order); member of the latest CLOSED activity;
   - for every case, walk the output recursively and assert that **no key** is `rank`, `isWinner`, `groupNumber` (except `membership.groupNumber`), `count` or `total`;
   - assert that `units` is absent outside OPEN;
   - assert that `group.submissions` contains only the `own_submissions` passed in (FR-015, FR-022 – FR-025, Constitution III).
-- [ ] T006 [P] Extend `tests/unit/test_db.py` with 002 schema tests:
+- [X] T006 [P] Extend `tests/unit/test_db.py` with 002 schema tests:
   - `init_schema` is idempotent and adds `participants`, `submissions` and `submission_answers` to a DB that already holds 001 tables and rows, leaving those rows unchanged;
   - the CHECK and UNIQUE constraints reject bad rows: `data-model.md › Participant.group_number`, `Participant.display_name` (0 and 21 characters rejected, 1 and 20 accepted), `Participant.token_hash` (duplicate rejected), `Submission.rank` (0 rejected), `Submission.group_number`, `SubmissionAnswer.text` (0 and 201 characters rejected; 200 CJK characters accepted, so `length()` counts characters);
   - `UNIQUE (unit_id, group_number)` and `UNIQUE (unit_id, rank)` (`data-model.md › Submission`) each reject a second row;
   - deleting an activity cascades to participants, units, slots, submissions and submission_answers (`data-model.md › Participant.activity_id`, `Submission.unit_id`).
-- [ ] T007 [P] Write `tests/integration/test_teacher_guard.py`:
+- [X] T007 [P] Write `tests/integration/test_teacher_guard.py`:
   - with `anon_client`, iterate over **every** route in `app.routes` whose path starts with `/api/teacher`, except `POST /api/teacher/session`. Call each with its method, a placeholder id `1` and an invalid JSON body. Each must return 401 with exactly `{"error": {"code": "teacher_required", "message": "Teacher passcode required."}}`, never 422 (the guard runs before validation). Assert the 001 routes are in the iterated set by name, so the list cannot silently shrink;
   - `POST /api/teacher/session` with a wrong passcode gives 401 `wrong_passcode` and no `Set-Cookie`;
   - with the right passcode it gives 204, and `Set-Cookie: qb_teacher` has `HttpOnly`, `SameSite=Strict`, `Path=/` and no `Max-Age` or `Expires`;
@@ -114,7 +114,7 @@ record: test id, date and failing output summary.
   - `/ws/teacher` without the cookie is accepted and then closed with code 4401 before any message.
 
   Covers FR-001 – FR-003, SC-006, `contracts/rest-api.md › Teacher access`, and `contracts/websocket.md › /ws/teacher`.
-- [ ] T008 [P] Write `tests/integration/test_ws_student.py` (state part). Use `student_client()` sockets (cookie passed in headers if the TestClient websocket does not forward its jar):
+- [X] T008 [P] Write `tests/integration/test_ws_student.py` (state part). Use `student_client()` sockets (cookie passed in headers if the TestClient websocket does not forward its jar):
   - on connect with no activity, `student.state` has `activity: null`;
   - after a teacher creates an activity (001 confirm), every connected student socket receives `student.state` with `{id, phase: "DRAFT", groupCount}` and no membership (FR-008, FR-031);
   - after a re-import, sockets receive a fresh snapshot;
@@ -124,15 +124,15 @@ record: test id, date and failing output summary.
 
 ### Implementation for Foundational
 
-- [ ] T009 Implement the passcode configuration in `src/quizbuzzer/config.py`:
+- [X] T009 Implement the passcode configuration in `src/quizbuzzer/config.py`:
   - `Settings.teacher_passcode: str = ""` as the last field;
   - `load_settings()` reads `TEACHER_PASSCODE`, strips it, and raises `ConfigError("TEACHER_PASSCODE is not set in .env.")` when it is blank.
 
   In `src/quizbuzzer/main.py`, `create_app()` raises the same error when `settings.teacher_passcode` is blank (research R1). Makes T003 pass.
-- [ ] T010 Implement the teacher guard (research R1, `diagrams/002-seq-teacher-unlock.puml`):
+- [X] T010 Implement the teacher guard (research R1, `diagrams/002-seq-teacher-unlock.puml`):
   - `src/quizbuzzer/api/auth.py`: `TeacherSessions` (lock-guarded set; `create(passcode)` using `hmac.compare_digest` on UTF-8 bytes and `secrets.token_urlsafe(32)`; `is_valid(token)`), `WrongPasscode`, `TeacherRequired`, and the dependency `require_teacher(request)`, which reads the `qb_teacher` cookie;
   - `src/quizbuzzer/api/auth_routes.py`: `POST /api/teacher/session`, which sets the cookie with the attributes in the contract;
-  - in `src/quizbuzzer/api/teacher_routes.py`, set `APIRouter(..., dependencies=[Depends(require_teacher)])`;
+  - ~~in `src/quizbuzzer/api/teacher_routes.py`, set `APIRouter(..., dependencies=[Depends(require_teacher)])`~~ **done instead as** `TeacherGuardMiddleware` in `src/quizbuzzer/api/auth.py`, added in `main.py`: a router dependency runs after FastAPI parses the JSON body, so a malformed body got 422 instead of 401 (research R1, changed 2026-11-27);
   - in `src/quizbuzzer/api/ws_routes.py`, `/ws/teacher` checks the cookie first and on failure accepts, then closes with 4401;
   - in `src/quizbuzzer/main.py`, create `app.state.teacher_sessions`, include `auth_routes` before `teacher_routes`, and register the 401 handlers.
 
@@ -143,15 +143,15 @@ record: test id, date and failing output summary.
   - the log-hygiene test in `tests/integration/test_import_api.py` passes `teacher_passcode=f"pass-{SENTINEL}"` and asserts the passcode never appears in captured logs.
 
   Makes T004 and T007 pass, and `uv run pytest` is fully green again, with 001's tests otherwise unchanged.
-- [ ] T011 [P] Add the domain types to `src/quizbuzzer/models.py`: `Participant`, `Submission` (with `is_winner` property), `SubmissionAnswer` and `StudentKey` (`NamedTuple(activity_id, participant_id, group_number)`). Fields follow `data-model.md › Participant`, `Submission` and `SubmissionAnswer`. Group stays a plain `group_number: int` (research R4).
-- [ ] T012 Add the 002 tables to `SCHEMA` in `src/quizbuzzer/db.py` (`CREATE … IF NOT EXISTS`; no change to 001 tables, research R5). Each column, CHECK, UNIQUE, FK and cascade follows its canonical definition:
+- [X] T011 [P] Add the domain types to `src/quizbuzzer/models.py`: `Participant`, `Submission` (with `is_winner` property), `SubmissionAnswer` and `StudentKey` (`NamedTuple(activity_id, participant_id, group_number)`). Fields follow `data-model.md › Participant`, `Submission` and `SubmissionAnswer`. Group stays a plain `group_number: int` (research R4).
+- [X] T012 Add the 002 tables to `SCHEMA` in `src/quizbuzzer/db.py` (`CREATE … IF NOT EXISTS`; no change to 001 tables, research R5). Each column, CHECK, UNIQUE, FK and cascade follows its canonical definition:
   - `participants`: `data-model.md › Participant.id`, `Participant.activity_id`, `Participant.group_number`, `Participant.display_name`, `Participant.token_hash`, `Participant.joined_at`, plus the `(activity_id, group_number)` index;
   - `submissions`: `data-model.md › Submission.id`, `Submission.unit_id`, `Submission.group_number`, `Submission.participant_id`, `Submission.rank`, `Submission.received_at`, plus `data-model.md › Submission` › Constraints (`UNIQUE (unit_id, group_number)`, `UNIQUE (unit_id, rank)`);
   - `submission_answers`: `data-model.md › SubmissionAnswer.submission_id`, `SubmissionAnswer.slot_id`, `SubmissionAnswer.text`, PK `(submission_id, slot_id)`.
 
   Update the module docstring. Makes T006 pass.
-- [ ] T013 [P] Implement the pure `src/quizbuzzer/services/visibility.py: student_view(activity, participant, members, own_submissions) -> dict`, producing `contracts/rest-api.md › StudentState` exactly. It takes no DB connection and no other groups' data. Makes T005 pass.
-- [ ] T014 Refactor `src/quizbuzzer/realtime/hub.py: RealtimeHub` (research R6):
+- [X] T013 [P] Implement the pure `src/quizbuzzer/services/visibility.py: student_view(activity, participant, members, own_submissions) -> dict`, producing `contracts/rest-api.md › StudentState` exactly. It takes no DB connection and no other groups' data. Makes T005 pass.
+- [X] T014 Refactor `src/quizbuzzer/realtime/hub.py: RealtimeHub` (research R6):
   - `teachers: set[WebSocket]`, plus `connect_teacher` / `disconnect`;
   - `students: dict[WebSocket, StudentKey | None]`, plus `connect_student(ws, key)`;
   - `student_sockets(activity_id=None, group_number=None) -> list[(ws, key)]`;
@@ -160,14 +160,14 @@ record: test id, date and failing output summary.
   - `publish_from_thread(coro_factory)`, which keeps 001's anyio hand-off behaviour.
 
   Keep `activity_state_message`. Update the existing teacher-socket call sites in `src/quizbuzzer/services/activity_service.py` and `src/quizbuzzer/api/ws_routes.py` and any hub tests (`tests/integration/test_ws_teacher.py` now connects with the teacher cookie).
-- [ ] T015 Create `src/quizbuzzer/services/participation_service.py: ParticipationService(db_path, hub)` with only the read and publish side for now:
+- [X] T015 Create `src/quizbuzzer/services/participation_service.py: ParticipationService(db_path, hub)` with only the read and publish side for now:
   - `resolve_key(token) -> StudentKey | None`, which hashes with sha256 and matches `data-model.md › Participant.token_hash`;
   - `student_state(key) -> dict`, which reads the activity, the participant, the own group's members and the own group's submissions, then calls `visibility.student_view`. With no current activity it falls back to the participant's activity only when that activity is the latest CLOSED one. A key whose participant no longer exists gets the no-membership view;
   - `publish_student_states()`, which builds one snapshot per connected student socket in the worker thread, then calls one `hub.send_many`;
   - `publish_group_state(activity_id, group_number)`, which sends only to sockets with that key.
 
   Add the db queries it needs to `src/quizbuzzer/db.py`: `find_participant_by_token_hash`, `list_group_members`, `list_group_submissions` and `find_latest_activity`. Also add `insert_participant(conn, activity_id, group_number, display_name, token_hash, joined_at)` (fields per `data-model.md › Participant.activity_id`, `Participant.group_number`, `Participant.display_name`, `Participant.token_hash`, `Participant.joined_at`) now, so that the US1 and US3 tests can create members before US2's `join` exists.
-- [ ] T016 Wire the student read path:
+- [X] T016 Wire the student read path:
   - `src/quizbuzzer/api/student_routes.py`: `GET /api/student/state`;
   - `/ws/student` in `src/quizbuzzer/api/ws_routes.py`: resolve the key, register the socket, then send `student.state` (`diagrams/002-seq-reconnect.puml`);
   - `src/quizbuzzer/api/schemas.py`: response models;
@@ -175,7 +175,7 @@ record: test id, date and failing output summary.
   - `src/quizbuzzer/services/activity_service.py`: `create_from_import` and `replace_questions` call `student_publisher()` after their commit.
 
   Makes T008 pass.
-- [ ] T017 [P] Create the student page shell:
+- [X] T017 [P] Create the student page shell:
   - `GET /student` serves `src/quizbuzzer/static/student.html`, and `GET /` redirects (307) to `/student`, both in `src/quizbuzzer/main.py`;
   - `src/quizbuzzer/static/student.js`: one `render(state)` choosing among five screens (no activity / join form / waiting / answering / closed) from `student.state` only;
   - a socket wrapper that reconnects after 0.5 s, doubling up to a 5 s cap, and shows "Reconnecting…" while down (research R8, FR-030, FR-031).

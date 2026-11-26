@@ -11,7 +11,17 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
-from quizbuzzer.models import Activity, AnswerSlot, ParsedUnit, Phase, QuestionUnit, UnitKind
+from quizbuzzer.models import (
+    Activity,
+    AnswerSlot,
+    ParsedUnit,
+    Participant,
+    Phase,
+    QuestionUnit,
+    Submission,
+    SubmissionAnswer,
+    UnitKind,
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS activities (
@@ -54,6 +64,37 @@ CREATE TABLE IF NOT EXISTS answer_slots (
     a1_ref      TEXT    NOT NULL,
     UNIQUE (unit_id, sub_part)
 );
+
+-- Feature 002 (specs/002-live-buzz-activity/data-model.md). Groups are values, not rows.
+CREATE TABLE IF NOT EXISTS participants (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    activity_id  INTEGER NOT NULL REFERENCES activities (id) ON DELETE CASCADE,
+    group_number INTEGER NOT NULL CHECK (group_number BETWEEN 1 AND 12),
+    display_name TEXT    NOT NULL CHECK (length(display_name) BETWEEN 1 AND 20),
+    token_hash   TEXT    NOT NULL UNIQUE,
+    joined_at    TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS participants_by_group ON participants (activity_id, group_number);
+
+-- rank is assigned in the submit transaction (BEGIN IMMEDIATE); the two UNIQUE constraints
+-- make a second submission by one group, or a second row with the same rank, impossible.
+CREATE TABLE IF NOT EXISTS submissions (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    unit_id        INTEGER NOT NULL REFERENCES question_units (id) ON DELETE CASCADE,
+    group_number   INTEGER NOT NULL CHECK (group_number BETWEEN 1 AND 12),
+    participant_id INTEGER NOT NULL REFERENCES participants (id),
+    rank           INTEGER NOT NULL CHECK (rank >= 1),
+    received_at    TEXT    NOT NULL,
+    UNIQUE (unit_id, group_number),
+    UNIQUE (unit_id, rank)
+);
+
+CREATE TABLE IF NOT EXISTS submission_answers (
+    submission_id INTEGER NOT NULL REFERENCES submissions (id) ON DELETE CASCADE,
+    slot_id       INTEGER NOT NULL REFERENCES answer_slots (id),
+    text          TEXT    NOT NULL CHECK (length(text) BETWEEN 1 AND 200),
+    PRIMARY KEY (submission_id, slot_id)
+);
 """
 
 
@@ -71,7 +112,7 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
 
 
 def init_schema(conn: sqlite3.Connection) -> None:
-    """Create the 001 tables and index if missing (idempotent)."""
+    """Create the 001 and 002 tables and indexes if missing (idempotent; 002 research R5)."""
     conn.executescript(SCHEMA)
 
 
@@ -201,6 +242,118 @@ def get_activity_with_units(conn: sqlite3.Connection, activity_id: int) -> Activ
 
 def list_closed_activity_ids(conn: sqlite3.Connection) -> list[int]:
     return [r[0] for r in conn.execute("SELECT id FROM activities WHERE phase = 'CLOSED' ORDER BY id")]
+
+
+def find_latest_activity(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    """The most recently CLOSED activity (002 research R7).
+
+    Only one activity is ever non-CLOSED and ids only grow, so the highest CLOSED id is the
+    one closed last; no closed_at column is needed.
+    """
+    return conn.execute(
+        "SELECT id, title, phase FROM activities WHERE phase = 'CLOSED' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+
+
+# --- Feature 002 queries (specs/002-live-buzz-activity/data-model.md) ----------------------
+# Every function takes the caller's connection, so it runs inside the caller's transaction.
+
+
+def _participant(row: sqlite3.Row) -> Participant:
+    return Participant(
+        id=row["id"],
+        activity_id=row["activity_id"],
+        group_number=row["group_number"],
+        display_name=row["display_name"],
+        joined_at=row["joined_at"],
+    )
+
+
+def insert_participant(
+    conn: sqlite3.Connection,
+    *,
+    activity_id: int,
+    group_number: int,
+    display_name: str,
+    token_hash: str,
+    joined_at: str,
+) -> int:
+    cur = conn.execute(
+        "INSERT INTO participants (activity_id, group_number, display_name, token_hash, joined_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (activity_id, group_number, display_name, token_hash, joined_at),
+    )
+    return int(cur.lastrowid)
+
+
+def find_participant_by_token_hash(
+    conn: sqlite3.Connection, token_hash: str
+) -> Participant | None:
+    row = conn.execute("SELECT * FROM participants WHERE token_hash = ?", (token_hash,)).fetchone()
+    return _participant(row) if row else None
+
+
+def get_participant(conn: sqlite3.Connection, participant_id: int) -> Participant | None:
+    row = conn.execute("SELECT * FROM participants WHERE id = ?", (participant_id,)).fetchone()
+    return _participant(row) if row else None
+
+
+def list_group_members(conn: sqlite3.Connection, activity_id: int, group_number: int) -> list[str]:
+    """Display names of one group's members, in join order (duplicates kept)."""
+    return [
+        r[0]
+        for r in conn.execute(
+            "SELECT display_name FROM participants WHERE activity_id = ? AND group_number = ? "
+            "ORDER BY id",
+            (activity_id, group_number),
+        )
+    ]
+
+
+def _submissions(conn: sqlite3.Connection, where: str, params: tuple) -> list[Submission]:
+    rows = conn.execute(
+        "SELECT s.*, u.number AS unit_number, p.display_name AS submitted_by "
+        "FROM submissions s JOIN question_units u ON s.unit_id = u.id "
+        "JOIN participants p ON s.participant_id = p.id "
+        f"WHERE {where} ORDER BY u.position, s.rank",
+        params,
+    ).fetchall()
+    answers: dict[int, list[SubmissionAnswer]] = {}
+    if rows:
+        ids = [r["id"] for r in rows]
+        marks = ",".join("?" * len(ids))
+        for a in conn.execute(
+            "SELECT a.submission_id, a.slot_id, a.text, sl.sub_part FROM submission_answers a "
+            f"JOIN answer_slots sl ON a.slot_id = sl.id WHERE a.submission_id IN ({marks}) "
+            "ORDER BY sl.sub_part",
+            ids,
+        ):
+            answers.setdefault(a["submission_id"], []).append(
+                SubmissionAnswer(slot_id=a["slot_id"], sub_part=a["sub_part"], text=a["text"])
+            )
+    return [
+        Submission(
+            id=r["id"],
+            unit_id=r["unit_id"],
+            unit_number=r["unit_number"],
+            group_number=r["group_number"],
+            participant_id=r["participant_id"],
+            submitted_by=r["submitted_by"],
+            rank=r["rank"],
+            received_at=r["received_at"],
+            answers=tuple(answers.get(r["id"], ())),
+        )
+        for r in rows
+    ]
+
+
+def list_group_submissions(
+    conn: sqlite3.Connection, activity_id: int, group_number: int
+) -> list[Submission]:
+    """One group's own submissions in this activity, in sheet order."""
+    return _submissions(
+        conn, "u.activity_id = ? AND s.group_number = ?", (activity_id, group_number)
+    )
 
 
 @contextmanager

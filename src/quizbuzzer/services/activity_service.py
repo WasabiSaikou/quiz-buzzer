@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -123,10 +124,19 @@ def _validate_group_count(value: object) -> int:
 
 
 class ActivityService:
-    def __init__(self, adapter: SheetsAdapter, db_path: str | Path, hub=None) -> None:
+    def __init__(
+        self,
+        adapter: SheetsAdapter,
+        db_path: str | Path,
+        hub=None,
+        student_publisher: Callable[[], None] | None = None,
+    ) -> None:
         self.adapter = adapter
         self.db_path = Path(db_path)
         self.hub = hub
+        # ParticipationService.publish_student_states (002 research R6): every student-bound
+        # message is built there, through the visibility filter, never here.
+        self.student_publisher = student_publisher
 
     # --- US1: locate and preview ---------------------------------------------------------
 
@@ -287,5 +297,11 @@ class ActivityService:
             raise CurrentActivityExists(current["id"], current["title"], Phase(current["phase"]))
 
     def _publish(self, activity: Activity | None) -> None:
+        """After a commit: teacher `activity.state`, then every student's own snapshot."""
         if self.hub is not None:
             self.hub.publish_from_thread(activity_state_message(activity))
+        self._publish_students()
+
+    def _publish_students(self) -> None:
+        if self.student_publisher is not None:
+            self.student_publisher()

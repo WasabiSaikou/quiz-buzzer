@@ -2,7 +2,8 @@
 
 Router: `src/quizbuzzer/api/teacher_routes.py`, prefix `/api/teacher`. All bodies are JSON
 (UTF-8), and fields are camelCase. Every endpoint here is teacher-only. Feature 002 adds its
-passcode check as a router dependency, so this feature defines no auth of its own.
+passcode check (`TeacherGuardMiddleware`, before routing; see 002 research R1), so this feature
+defines no auth of its own.
 
 ## Error envelope (all non-2xx)
 

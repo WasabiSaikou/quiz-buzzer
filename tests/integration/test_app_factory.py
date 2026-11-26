@@ -77,3 +77,12 @@ def test_request_validation_uses_envelope(app, client):
     assert r.status_code == 422
     assert r.json()["error"]["code"] == "invalid_request"
     assert r.json()["error"]["details"] == {"fields": ["url"]}
+
+
+def test_student_page_is_served_and_root_redirects(anon_client):
+    r = anon_client.get("/student")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    r = anon_client.get("/", follow_redirects=False)
+    assert r.status_code == 307
+    assert r.headers["location"] == "/student"

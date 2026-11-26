@@ -48,7 +48,7 @@ SUI <..> WSR : WebSocket /ws/student
 
 TUI --> AR : passcode (unlock)
 AR --> AUTH : TeacherSessions.create(passcode)
-TR --> AUTH : every route\n(router dependency)
+TR --> AUTH : every route, before routing\n(TeacherGuardMiddleware)
 WSR --> AUTH : /ws/teacher upgrade
 TR --> ACT : teacher commands and queries
 SR --> PART : join, leave, submit, state

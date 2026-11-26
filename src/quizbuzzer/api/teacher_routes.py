@@ -1,7 +1,8 @@
 """Teacher REST endpoints, prefix /api/teacher (contracts/rest-api.md).
 
 Plain `def` handlers: FastAPI runs them in worker threads, which suits the synchronous Google
-client and sqlite3 (research R8). Feature 002 adds its passcode check as a router dependency.
+client and sqlite3 (research R8). Every route here is behind 002's TeacherGuardMiddleware
+(api/auth.py), which rejects requests without the teacher cookie before routing.
 """
 
 from __future__ import annotations

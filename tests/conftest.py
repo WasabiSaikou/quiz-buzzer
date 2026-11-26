@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from quizbuzzer.main import create_app
 from tests.fakes.fake_sheets_adapter import FIXTURES_DIR, FakeSheetsAdapter
 
 EDGE_CASES_DIR = FIXTURES_DIR / "edge_cases"
+TEST_PASSCODE = "test-passcode"
 
 
 @pytest.fixture
@@ -29,7 +31,13 @@ def db_path(tmp_path: Path) -> Path:
 @pytest.fixture
 def settings(db_path: Path) -> Settings:
     # Never read the developer's real .env or credentials in tests.
-    return Settings(credentials_path=None, db_path=db_path, host="127.0.0.1", port=8000)
+    return Settings(
+        credentials_path=None,
+        db_path=db_path,
+        host="127.0.0.1",
+        port=8000,
+        teacher_passcode=TEST_PASSCODE,
+    )
 
 
 @pytest.fixture
@@ -39,8 +47,35 @@ def app(fake_adapter: FakeSheetsAdapter, db_path: Path, settings: Settings):
 
 @pytest.fixture
 def client(app) -> TestClient:
+    """An unlocked teacher client (002 research R9): 001's tests run unchanged behind the guard."""
+    with TestClient(app) as c:
+        r = c.post("/api/teacher/session", json={"passcode": TEST_PASSCODE})
+        assert r.status_code == 204, r.text
+        yield c
+
+
+@pytest.fixture
+def anon_client(app) -> TestClient:
+    """A client with no cookies at all: a student page or a crafted request (002 FR-002)."""
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def student_client(app):
+    """Factory of separate TestClients (separate cookie jars) on the same app (002 research R9)."""
+    with contextlib.ExitStack() as stack:
+
+        def _make() -> TestClient:
+            return stack.enter_context(TestClient(app))
+
+        yield _make
+
+
+def ws_headers(c: TestClient) -> dict[str, str]:
+    """Cookie header built from a client's jar, for WebSocket connects (002 research R9)."""
+    cookie = "; ".join(f"{name}={value}" for name, value in c.cookies.items())
+    return {"cookie": cookie} if cookie else {}
 
 
 @pytest.fixture

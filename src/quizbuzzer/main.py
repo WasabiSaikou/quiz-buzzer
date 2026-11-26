@@ -13,15 +13,17 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from quizbuzzer import db
-from quizbuzzer.api import teacher_routes, ws_routes
+from quizbuzzer.api import auth_routes, student_routes, teacher_routes, ws_routes
+from quizbuzzer.api.auth import TeacherGuardMiddleware, TeacherSessions, WrongPasscode
 from quizbuzzer.api.schemas import PreviewResponse
-from quizbuzzer.config import ConfigError, Settings, load_settings
+from quizbuzzer.config import PASSCODE_MISSING, ConfigError, Settings, load_settings
 from quizbuzzer.models import SpreadsheetInfo, TabData
 from quizbuzzer.realtime.hub import RealtimeHub
+from quizbuzzer.services.participation_service import ParticipationService
 from quizbuzzer.services.activity_service import (
     ActivityNotFound,
     ActivityService,
@@ -178,12 +180,19 @@ def _register_activity_errors(app: FastAPI) -> None:
     )
 
 
+def _register_auth_errors(app: FastAPI) -> None:
+    """002 contracts/rest-api.md › Teacher access. No details: never hint at the passcode."""
+    register_error(app, WrongPasscode, 401, "wrong_passcode", "Wrong passcode.")
+
+
 def create_app(
     adapter: SheetsAdapter | None = None,
     db_path: str | Path | None = None,
     settings: Settings | None = None,
 ) -> FastAPI:
     settings = settings or load_settings()
+    if not settings.teacher_passcode.strip():
+        raise ConfigError(PASSCODE_MISSING)  # 002 FR-004: refuse to start without it
     db_path = Path(db_path) if db_path is not None else settings.db_path
 
     conn = db.connect(db_path)
@@ -197,11 +206,22 @@ def create_app(
     app.state.db_path = db_path
     app.state.adapter = adapter if adapter is not None else LazyGoogleSheetsAdapter(settings)
     app.state.hub = RealtimeHub()
-    app.state.service = ActivityService(app.state.adapter, db_path, app.state.hub)
+    app.state.participation = ParticipationService(db_path, app.state.hub)
+    app.state.service = ActivityService(
+        app.state.adapter,
+        db_path,
+        app.state.hub,
+        student_publisher=app.state.participation.publish_student_states,
+    )
+    app.state.teacher_sessions = TeacherSessions(settings.teacher_passcode.strip())
 
     _register_core_errors(app)
     _register_activity_errors(app)
+    _register_auth_errors(app)
+    app.add_middleware(TeacherGuardMiddleware)
+    app.include_router(auth_routes.router)
     app.include_router(teacher_routes.router)
+    app.include_router(student_routes.router)
     app.include_router(ws_routes.router)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -209,6 +229,14 @@ def create_app(
     @app.get("/teacher", include_in_schema=False)
     def teacher_page() -> FileResponse:
         return FileResponse(STATIC_DIR / "teacher.html", media_type="text/html; charset=utf-8")
+
+    @app.get("/student", include_in_schema=False)
+    def student_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "student.html", media_type="text/html; charset=utf-8")
+
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        return RedirectResponse("/student", status_code=307)  # 002 research R8
 
     return app
 

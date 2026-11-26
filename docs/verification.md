@@ -97,3 +97,50 @@ Every FR and SC maps to at least one passing test, a pending manual check above,
 - **Teacher page in a browser**: the JavaScript is syntax-checked and the API it calls is fully
   tested, but no browser test exists; M3 and M6–M8 cover the page by hand.
 - **Code-vs-diagram check**: done, see [diagrams/VERIFICATION.md](../diagrams/VERIFICATION.md).
+
+---
+
+# Feature 002 — Live Buzz-In Activity
+
+Spec: [specs/002-live-buzz-activity/spec.md](../specs/002-live-buzz-activity/spec.md) ·
+Tasks: [tasks.md](../specs/002-live-buzz-activity/tasks.md). Baseline before 002 work: **210
+passed** at `35e0ee5` (2026-11-27).
+
+## Test-first record (002)
+
+Each core-rule test was written first, run, and **observed failing** before its implementation.
+
+| Phase | Tests written first | Red run (summary) | Green run | Commit |
+|---|---|---|---|---|
+| 2 · Foundational: passcode config, teacher guard, schema, visibility filter, student state | `unit/test_config.py`, `unit/test_teacher_sessions.py`, `unit/test_visibility.py`, `unit/test_db.py` (002 part), `integration/test_teacher_guard.py`, `integration/test_ws_student.py` (state part) | 41 failed, 2 collection errors (`api.auth`, `services.visibility` missing), 11 passed (pre-existing `test_db` tests) | 272 passed (full suite) | Phase 2 commit |
+
+## Manual verification (M11–M25)
+
+Scenarios from [quickstart.md §5](../specs/002-live-buzz-activity/quickstart.md). To be run by a
+human tester on real devices on the classroom LAN (Principle V). Fill in Result and Evidence (no
+secrets, no student data, Principle VI).
+
+**Date**: · **Tester**: · **Commit**: · **Devices**:
+
+| # | Steps (short) | Expected | Result | Evidence |
+|---|---|---|---|---|
+| M11 | Start without `TEACHER_PASSCODE` | Startup fails naming `TEACHER_PASSCODE` (FR-004) | | |
+| M12 | Wrong then right passcode on `/teacher` | Locked, then unlocked (US1 AS1–2) | | |
+| M13 | Student device calls `/api/teacher/…` | 401 `teacher_required`, no data (FR-002, SC-006) | | |
+| M14 | Student page before / after import | "No activity available yet", then join form without reload (FR-031) | | |
+| M15 | Join, duplicate names, change group in DRAFT | Accepted; dashboard lists members (FR-011, FR-013, FR-028) | | |
+| M16 | Open; time screen switch | All screens switch within 1 s; change group refused (SC-001) | | |
+| M17 | Whitespace answer, then valid 題組 | Refused naming sub-part; then accepted; teammate updates, other group unchanged (SC-002) | | |
+| M18 | Teammate resubmits | "Your group has already submitted question N" (FR-018) | | |
+| M19 | Two groups submit together | Ranks 1 and 2, one winner; no rank on student screens (FR-019, FR-023) | | |
+| M20 | DevTools on another group's device | No foreign answer, group, name or rank (SC-005) | | |
+| M21 | Refresh; Wi-Fi off/on | Same screen and group state; "Reconnecting…" (FR-030, SC-007) | | |
+| M22 | End while a student keeps submitting | Closed everywhere within 1 s; refused or ranked, never both; refresh keeps final dashboard (FR-029) | | |
+| M23 | Cancel a DRAFT with students joined, re-import | Students see "No activity available yet"; import succeeds (US5) | | |
+| M24 | Cancel an OPEN activity from a second tab | "An OPEN activity can only be ended" (US5 AS4) | | |
+| M25 | Server log after M11–M24 | No passcode, names or answers (FR-004, FR-032) | | |
+
+## Automated test runs (002)
+
+| Date | Commit | Result | Notes |
+|---|---|---|---|
