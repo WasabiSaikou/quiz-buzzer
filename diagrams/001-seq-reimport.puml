@@ -1,0 +1,66 @@
+@startuml 001-seq-reimport
+title 001 Sheets Import - Re-import into a DRAFT activity
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Teacher
+participant "Teacher UI" as TUI
+participant "API server" as API
+participant "Activity service" as ACT
+participant "Sheets adapter" as SA
+participant "Google Sheets API" as GSA
+database "SQLite store" as DB
+
+Teacher -> TUI : re-import (url, tab)
+TUI -> API : request re-import preview (activityId, url, tab)
+API -> ACT : checkReimportAllowed(activityId)
+ACT -> DB : read activity phase
+alt phase is OPEN or CLOSED
+  ACT --> API : Refused(phase)
+  API --> TUI : error "activity is <phase>; re-import not allowed"
+else phase is DRAFT
+  API -> SA : readTab + parse (url, tab)
+  SA -> GSA : read cell values (read-only)
+  GSA --> SA : cell grid
+  SA --> API : ImportPreview
+  API --> TUI : preview (errors / warnings)
+  Teacher -> TUI : confirm replacement
+  TUI -> API : confirm re-import (activityId, url, tab,\npreview fingerprint)
+  API -> ACT : replaceQuestions(...)
+  ACT -> SA : readTab + parse (url, tab)
+  SA -> GSA : read cell values (read-only)
+  GSA --> SA : cell grid
+  SA --> ACT : ImportPreview
+  alt errors, or structure differs from fingerprint
+    ACT --> API : ImportErrors / PreviewChanged
+    API --> TUI : errors or updated preview
+  else ok
+    ACT -> DB : BEGIN
+    ACT -> DB : re-check phase = DRAFT
+    alt phase changed to OPEN or CLOSED
+      ACT -> DB : ROLLBACK
+      ACT --> API : Refused(phase)
+      API --> TUI : error, questions unchanged
+    else still DRAFT
+      ACT -> DB : delete old QuestionUnits + AnswerSlots
+      ACT -> DB : insert new QuestionUnits + AnswerSlots
+      ACT -> DB : update source spreadsheet / tab, importedAt
+      ACT -> DB : COMMIT
+      ACT --> API : replaced
+      API --> TUI : updated DRAFT activity\n(phase + groupCount unchanged)
+    end
+  end
+end
+
+note right of DB
+  Phase is re-checked inside the same
+  transaction as the replacement (FR-026).
+end note
+
+note over TUI, API
+  Teacher-only: feature 002's teacher
+  passcode check applies.
+end note
+@enduml

@@ -1,0 +1,65 @@
+@startuml 001-seq-confirm-create
+title 001 Sheets Import - Confirm preview and create DRAFT activity
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Teacher
+participant "Teacher UI" as TUI
+participant "API server" as API
+participant "Activity service" as ACT
+participant "Sheets adapter" as SA
+participant "Google Sheets API" as GSA
+database "SQLite store" as DB
+
+Teacher -> TUI : choose group count (2-12),\nacknowledge warnings, confirm
+TUI -> API : create activity (url, tab, groupCount,\npreview fingerprint)
+API -> ACT : createFromImport(...)
+alt groupCount outside 2-12
+  ACT --> API : ValidationError
+  API --> TUI : error "group count must be 2-12"
+else valid
+  ACT -> SA : readTab + parse (url, tab)
+  SA -> GSA : read cell values (read-only)
+  GSA --> SA : cell grid
+  SA --> ACT : ImportPreview
+  alt preview has errors
+    ACT --> API : ImportErrors
+    API --> TUI : errors (confirmation blocked)
+  else structure differs from confirmed fingerprint
+    ACT --> API : PreviewChanged(new preview)
+    API --> TUI : show updated preview
+  else matches
+    ACT -> DB : BEGIN
+    ACT -> DB : any activity with phase DRAFT or OPEN?
+    alt a current (non-CLOSED) activity exists
+      ACT -> DB : ROLLBACK
+      ACT --> API : Refused(current activity, phase)
+      API --> TUI : error naming current activity;\nsuggest re-import (DRAFT) or close (OPEN)
+    else none
+      ACT -> DB : insert Activity (phase = DRAFT, groupCount, source)
+      ACT -> DB : insert QuestionUnits + AnswerSlots\n(answer cell locations)
+      ACT -> DB : COMMIT
+      DB --> ACT : ok
+      ACT --> API : activity id
+      API --> TUI : created (DRAFT)
+      TUI --> Teacher : show DRAFT activity
+    end
+  end
+end
+
+note right of DB
+  All-or-nothing (FR-023):
+  any failure rolls back.
+  "At most one non-CLOSED activity"
+  is checked inside the same
+  transaction (FR-020a). CLOSED
+  activities are never touched.
+end note
+
+note over TUI, API
+  Teacher-only: feature 002's teacher
+  passcode check applies.
+end note
+@enduml

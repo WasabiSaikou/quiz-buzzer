@@ -1,0 +1,64 @@
+@startuml 001-seq-import-preview
+title 001 Sheets Import - Preview detected questions
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Teacher
+participant "Teacher UI" as TUI
+participant "API server" as API
+participant "Sheets adapter" as SA
+participant "Guided Notes parser" as PARSER
+participant "Google Sheets API" as GSA
+
+Teacher -> TUI : paste spreadsheet URL
+TUI -> API : request tab list (url)
+API -> SA : listTabs(url)
+alt URL is not a Google Sheets spreadsheet link
+  SA --> API : InvalidUrl
+  API --> TUI : error "not a Google Sheets link"
+else valid URL
+  SA -> GSA : read spreadsheet metadata (read-only)
+  alt not shared with service account
+    GSA --> SA : permission denied
+    SA --> API : NotShared(serviceAccountEmail)
+    API --> TUI : error + "share with <service account email>"
+  else spreadsheet not found
+    GSA --> SA : not found
+    SA --> API : NotFound
+    API --> TUI : error "spreadsheet not found"
+  else readable
+    GSA --> SA : title, tabs
+    SA --> API : tabs
+    API --> TUI : tabs; preselect tab matching #gid=\n(else first tab)
+  end
+end
+
+Teacher -> TUI : keep preselected tab or select another
+TUI -> API : request preview (url, tab)
+API -> SA : readTab(url, tab)
+SA -> GSA : read cell values + merged ranges (read-only)
+GSA --> SA : cell grid
+SA -> PARSER : parse(grid)
+PARSER -> PARSER : find header row (題號 / 作答)
+PARSER -> PARSER : scan rows below header:\nnumbered rows (n, n., n、, Qn, qn;\nhalf/full-width digits),\n（k）/(k) markers, skip blank rows
+PARSER -> PARSER : unrecognised 題號 cell ->\nwarning (row + content)
+PARSER -> PARSER : unnumbered row with non-marker\nanswer text -> no slot, warning\n(cell + text)
+PARSER -> PARSER : any slot cell with text beyond\nits own marker -> warning\n(cell + text; export will replace it)
+PARSER -> PARSER : classify SINGLE / 題組,\ncompute answer cell per slot
+PARSER -> PARSER : collect errors and warnings\n(row / cell + remedy)
+PARSER --> SA : ImportPreview
+SA --> API : ImportPreview
+API --> TUI : questions, slots, answer cells,\nerrors, warnings, totals
+TUI --> Teacher : show preview\n(confirm disabled if errors)
+
+note over SA, GSA
+  Import never writes to the sheet (FR-005).
+end note
+
+note over TUI, API
+  Every request here is teacher-only:
+  feature 002's teacher passcode check applies.
+end note
+@enduml

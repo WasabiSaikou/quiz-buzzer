@@ -1,0 +1,71 @@
+@startuml system-component
+title Quiz Buzzer (課堂搶答系統) - System Components
+
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+
+actor Teacher
+actor "Student group" as Student
+
+node "Browser" {
+  [Teacher UI] as TUI
+  [Student UI] as SUI
+}
+
+node "Local server" {
+  [API server] as API
+  [Real-time channel] as RT
+  [Activity service] as ACT
+  component "Sheets adapter" as SA {
+    [Guided Notes parser] as PARSER
+    [Sheets client] as SCLIENT
+  }
+  database "SQLite store" as DB
+}
+
+cloud "Google" {
+  [Google Sheets API] as GSA
+}
+
+Teacher --> TUI
+Student --> SUI
+
+TUI --> API : HTTP (import, preview,\nconfirm, phase changes)
+SUI --> API : HTTP (join, submit)
+RT ..> TUI : push phase / state
+RT ..> SUI : push phase / own group state
+
+API --> ACT : commands
+API --> SA : preview requests
+ACT --> SA : re-read on confirm
+ACT --> DB : atomic transactions
+ACT --> RT : publish events
+SA --> GSA : read (import)\nwrite (export, later feature)
+PARSER ..> SCLIENT : uses cell grid
+
+note right of PARSER
+  Locates header (題號 / 作答),
+  numbered rows and （k） markers.
+  No hardcoded addresses
+  (Constitution II).
+end note
+
+note bottom of ACT
+  Sole authority for activity phase (IV),
+  arrival order and winner (I),
+  and visibility filtering (III).
+end note
+
+note right of SUI
+  Student UI and Real-time channel
+  are specified by later features.
+end note
+
+note left of API
+  Teacher actions (import, preview,
+  confirm, re-import, phase changes)
+  require feature 002's teacher
+  passcode check.
+end note
+@enduml
