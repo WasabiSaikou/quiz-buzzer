@@ -291,6 +291,81 @@ def insert_participant(
     return int(cur.lastrowid)
 
 
+def delete_participant(conn: sqlite3.Connection, participant_id: int) -> None:
+    conn.execute("DELETE FROM participants WHERE id = ?", (participant_id,))
+
+
+def get_group_count(conn: sqlite3.Connection, activity_id: int) -> int | None:
+    row = conn.execute("SELECT group_count FROM activities WHERE id = ?", (activity_id,)).fetchone()
+    return row["group_count"] if row else None
+
+
+def get_unit_for_activity(
+    conn: sqlite3.Connection, unit_id: int, activity_id: int
+) -> QuestionUnit | None:
+    """The unit with its slots, only if it belongs to `activity_id` (data-model › Submission.unit_id)."""
+    u = conn.execute(
+        "SELECT * FROM question_units WHERE id = ? AND activity_id = ?", (unit_id, activity_id)
+    ).fetchone()
+    if u is None:
+        return None
+    slots = tuple(
+        AnswerSlot(
+            id=s["id"],
+            sub_part=s["sub_part"],
+            cell_row=s["cell_row"],
+            cell_column=s["cell_column"],
+            a1_ref=s["a1_ref"],
+        )
+        for s in conn.execute(
+            "SELECT * FROM answer_slots WHERE unit_id = ? ORDER BY sub_part", (unit_id,)
+        )
+    )
+    return QuestionUnit(
+        id=u["id"],
+        number=u["number"],
+        kind=UnitKind(u["kind"]),
+        source_row=u["source_row"],
+        position=u["position"],
+        slots=slots,
+    )
+
+
+def count_unit_submissions(conn: sqlite3.Connection, unit_id: int) -> int:
+    return conn.execute("SELECT count(*) FROM submissions WHERE unit_id = ?", (unit_id,)).fetchone()[0]
+
+
+def get_group_submission(
+    conn: sqlite3.Connection, unit_id: int, group_number: int
+) -> Submission | None:
+    found = _submissions(conn, "s.unit_id = ? AND s.group_number = ?", (unit_id, group_number))
+    return found[0] if found else None
+
+
+def insert_submission(
+    conn: sqlite3.Connection,
+    *,
+    unit_id: int,
+    group_number: int,
+    participant_id: int,
+    rank: int,
+    received_at: str,
+    answers: Sequence[tuple[int, str]],
+) -> int:
+    """Insert one submission and its answers (slot_id, text). Runs in the caller's transaction."""
+    cur = conn.execute(
+        "INSERT INTO submissions (unit_id, group_number, participant_id, rank, received_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (unit_id, group_number, participant_id, rank, received_at),
+    )
+    submission_id = int(cur.lastrowid)
+    conn.executemany(
+        "INSERT INTO submission_answers (submission_id, slot_id, text) VALUES (?, ?, ?)",
+        [(submission_id, slot_id, text) for slot_id, text in answers],
+    )
+    return submission_id
+
+
 def find_participant_by_token_hash(
     conn: sqlite3.Connection, token_hash: str
 ) -> Participant | None:

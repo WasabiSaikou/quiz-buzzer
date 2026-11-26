@@ -248,7 +248,7 @@ the same unit is refused with `already_submitted`.
 
 ### Tests for User Story 2 (write first, observe failing) ⚠️
 
-- [ ] T025 [P] [US2] Write `tests/unit/test_participation_service.py` (join and leave):
+- [X] T025 [P] [US2] Write `tests/unit/test_participation_service.py` (join and leave):
   - names `" 小明 "` (stored trimmed), a 20-character name and a 21-character name (refused), and `"　"` (full-width space only, refused), per `data-model.md › Participant.display_name`;
   - group numbers 0, 1, `group_count`, `group_count + 1` and `13`, per `data-model.md › Participant.group_number` and 001 `Activity.group_count`;
   - join is allowed in DRAFT and OPEN; `JoinRefused` in CLOSED, with no current activity, and when `activity_id` is not the current one;
@@ -256,7 +256,7 @@ the same unit is refused with `already_submitted`.
   - the DB holds only `sha256(token)`, never the token (`data-model.md › Participant.token_hash`);
   - duplicate names are allowed (FR-011);
   - `leave` deletes the participant in DRAFT, raises `GroupChangeRefused(phase)` in OPEN and CLOSED, and raises `NotAMember` for an unknown token (FR-013).
-- [ ] T026 [P] [US2] Write `tests/unit/test_ranking.py`, the **core ranking rules**, tests first (Constitution I, FR-016 – FR-020):
+- [X] T026 [P] [US2] Write `tests/unit/test_ranking.py`, the **core ranking rules**, tests first (Constitution I, FR-016 – FR-020):
   - answer validation runs before the transaction: empty, `"  "`, `"　"`, `"\n"` and 201 characters are refused, and 200 characters are accepted; `details.subParts` lists every failing k; text is stored trimmed (`data-model.md › SubmissionAnswer.text`);
   - a `subPart` set that is missing, unknown or duplicated gives `InvalidAnswers` (`data-model.md › SubmissionAnswer.slot_id`);
   - the check order follows research R3: `NotAMember`, then `NotOpen` (DRAFT) / `ActivityEnded` (CLOSED), then `UnitNotFound` (another activity's unit), then `AlreadySubmitted` (whose `.submission` is the group's own);
@@ -267,8 +267,8 @@ the same unit is refused with `already_submitted`.
   - a monkeypatched clock that returns an *earlier* time for the second submission does not change the ranks (time never orders);
   - the returned dict has no `rank` or `isWinner` key;
   - a failure after the insert (monkeypatched) leaves no submission and no answers (all-or-nothing).
-- [ ] T027 [P] [US2] Write `tests/integration/test_submit_concurrency.py` (ranking part, SC-003). On a file DB, run 100 rounds. Each round, 12 threads (one per group, each with its own `ParticipationService`) submit the same unit behind a `threading.Barrier(12)`. Assert that every round gives exactly ranks {1..12} with no gaps or repeats, exactly one rank 1, and 12 rows. Add a same-group race: two members of one group submit one unit 50 times on fresh units, and exactly one is accepted, while the other gets `AlreadySubmitted` showing the accepted answer. Mark the 100-round test `@pytest.mark.slow` but keep it in the default run.
-- [ ] T028 [P] [US2] Write `tests/integration/test_student_api.py`:
+- [X] T027 [P] [US2] Write `tests/integration/test_submit_concurrency.py` (ranking part, SC-003). On a file DB, run 100 rounds. Each round, 12 threads (one per group, each with its own `ParticipationService`) submit the same unit behind a `threading.Barrier(12)`. Assert that every round gives exactly ranks {1..12} with no gaps or repeats, exactly one rank 1, and 12 rows. Add a same-group race: two members of one group submit one unit 50 times on fresh units, and exactly one is accepted, while the other gets `AlreadySubmitted` showing the accepted answer. Mark the 100-round test `@pytest.mark.slow` but keep it in the default run.
+- [X] T028 [P] [US2] Write `tests/integration/test_student_api.py`:
   - `POST /api/student/join` gives 201 with `StudentState`, and `Set-Cookie: qb_participant` has `HttpOnly`, `SameSite=Strict`, `Path=/` and `Max-Age=43200`;
   - each 422 `invalid_join` (`details.field`, `details.max`), 409 `join_refused` and 409 `already_joined`;
   - `DELETE /api/student/membership` gives 204 and clears the cookie in DRAFT, 409 `group_change_refused` in OPEN, and 401 `not_a_member` with no cookie;
@@ -280,8 +280,8 @@ the same unit is refused with `already_submitted`.
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Implement `join` and `leave` in `src/quizbuzzer/services/participation_service.py`, following `diagrams/002-seq-join.puml`. Use `validate_display_name`, exceptions `InvalidJoin(field, max)`, `JoinRefused(phase)`, `AlreadyJoined`, `GroupChangeRefused(phase)` and `NotAMember`, and checks per `data-model.md › Participant.display_name`, `Participant.group_number` and `Participant.token_hash`. Reuse `db.insert_participant` (T015) and add `delete_participant` to `src/quizbuzzer/db.py`. Makes T025 pass.
-- [ ] T030 [US2] Implement `submit(token, unit_id, answers)` in `src/quizbuzzer/services/participation_service.py`, following `diagrams/002-seq-submit.puml` and research R3 exactly:
+- [X] T029 [US2] Implement `join` and `leave` in `src/quizbuzzer/services/participation_service.py`, following `diagrams/002-seq-join.puml`. Use `validate_display_name`, exceptions `InvalidJoin(field, max)`, `JoinRefused(phase)`, `AlreadyJoined`, `GroupChangeRefused(phase)` and `NotAMember`, and checks per `data-model.md › Participant.display_name`, `Participant.group_number` and `Participant.token_hash`. Reuse `db.insert_participant` (T015) and add `delete_participant` to `src/quizbuzzer/db.py`. Makes T025 pass.
+- [X] T030 [US2] Implement `submit(token, unit_id, answers)` in `src/quizbuzzer/services/participation_service.py`, following `diagrams/002-seq-submit.puml` and research R3 exactly:
   - `validate_answers` runs first, outside the transaction;
   - then, in one `db.transaction`: participant, phase, unit + `subPart` set, duplicate, `rank = 1 + count`, insert submission + answers;
   - map an `IntegrityError` on `UNIQUE(unit_id, group_number)` to `AlreadySubmitted`, and re-raise any other;
@@ -296,8 +296,8 @@ the same unit is refused with `already_submitted`.
   - `SubmissionAnswer.text`: trimmed.
 
   Makes T026 and T027 pass.
-- [ ] T031 [US2] Add `POST /api/student/join`, `DELETE /api/student/membership` and `POST /api/student/submissions` to `src/quizbuzzer/api/student_routes.py`, with the cookie handling from `contracts/rest-api.md › Cookies`. Add request and response models to `src/quizbuzzer/api/schemas.py` (extra fields ignored), and the error handlers with exact codes and messages (`"Answer （k） is empty."`, `"Your group has already submitted question N."`, `"The activity has not opened yet."`, `"The activity has ended."`) to `src/quizbuzzer/main.py`. Makes T028 pass.
-- [ ] T032 [US2] Add the student actions to `src/quizbuzzer/static/student.js`:
+- [X] T031 [US2] Add `POST /api/student/join`, `DELETE /api/student/membership` and `POST /api/student/submissions` to `src/quizbuzzer/api/student_routes.py`, with the cookie handling from `contracts/rest-api.md › Cookies`. Add request and response models to `src/quizbuzzer/api/schemas.py` (extra fields ignored), and the error handlers with exact codes and messages (`"Answer （k） is empty."`, `"Your group has already submitted question N."`, `"The activity has not opened yet."`, `"The activity has ended."`) to `src/quizbuzzer/main.py`. Makes T028 pass.
+- [X] T032 [US2] Add the student actions to `src/quizbuzzer/static/student.js`:
   - a join form (group 1..groupCount select; name input, `maxlength=20`) that posts `activityId`;
   - "Change group" shown only in DRAFT;
   - a submit per unit, which posts `unitId` and `answers`;

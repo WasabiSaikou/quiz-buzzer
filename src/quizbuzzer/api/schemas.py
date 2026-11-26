@@ -249,6 +249,27 @@ class CurrentActivityResponse(ApiModel):
     activity: ActivityResponse | None
 
 
+# --- Student (002 contracts/rest-api.md › Student API) -----------------------------------
+# Extra fields are ignored (pydantic default), e.g. a crafted groupNumber on submit (FR-014).
+
+
+class JoinRequest(ApiModel):
+    activity_id: int
+    # Validated by ParticipationService so bad values give 422 invalid_join with details.
+    group_number: Any
+    display_name: Any
+
+
+class AnswerIn(ApiModel):
+    sub_part: int
+    text: str
+
+
+class SubmitRequest(ApiModel):
+    unit_id: int
+    answers: list[AnswerIn]
+
+
 # --- Errors -----------------------------------------------------------------------------
 
 

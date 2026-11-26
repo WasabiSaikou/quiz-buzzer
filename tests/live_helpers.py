@@ -99,3 +99,62 @@ def open_activity(client, activity: dict) -> dict:
     r = client.post(f"/api/teacher/activities/{activity['id']}/open")
     assert r.status_code == 200, r.text
     return r.json()
+
+
+# --- Service-level helpers (unit and concurrency tests) -----------------------------------
+
+LIVE = "https://docs.google.com/spreadsheets/d/live/edit"
+
+
+def live_grid(n_units: int) -> list[list[str]]:
+    """Question 1 is a 題組 with sub-parts (1)(2); questions 2..n are single questions."""
+    grid = [["題號", "作答"], ["1", "（1）"], ["", "（2）"]]
+    grid += [[str(i), ""] for i in range(2, n_units + 1)]
+    return grid
+
+
+def add_live_sheet(fake_adapter, n_units: int = 4) -> None:
+    fake_adapter.add_spreadsheet(
+        "live", "Live Book", [{"sheetId": 0, "title": "Live", "index": 0, "grid": live_grid(n_units)}]
+    )
+
+
+def init_schema(db_path) -> None:
+    from quizbuzzer import db
+
+    conn = db.connect(db_path)
+    db.init_schema(conn)
+    conn.close()
+
+
+def make_activity(fake_adapter, db_path, *, n_units: int = 4, group_count: int = 6, phase: str = "OPEN"):
+    """A DRAFT activity from the live sheet, moved to `phase` directly in the DB."""
+    from quizbuzzer import db
+    from quizbuzzer.services.activity_service import ActivityService
+
+    add_live_sheet(fake_adapter, n_units)
+    svc = ActivityService(fake_adapter, db_path)
+    p = svc.preview_import(LIVE, 0)
+    a = svc.create_from_import(LIVE, 0, group_count, p.fingerprint, True)
+    if phase != "DRAFT":
+        conn = db.connect(db_path)
+        try:
+            conn.execute("UPDATE activities SET phase = ? WHERE id = ?", (phase, a.id))
+        finally:
+            conn.close()
+    return svc.get_activity(a.id)
+
+
+def set_db_phase(db_path, activity_id: int, phase: str) -> None:
+    from quizbuzzer import db
+
+    conn = db.connect(db_path)
+    try:
+        conn.execute("UPDATE activities SET phase = ? WHERE id = ?", (phase, activity_id))
+    finally:
+        conn.close()
+
+
+def answers_for(unit, texts=None) -> list[dict]:
+    texts = texts or [f"ans-{unit.number}-{s.sub_part}" for s in unit.slots]
+    return [{"subPart": s.sub_part, "text": t} for s, t in zip(unit.slots, texts, strict=True)]

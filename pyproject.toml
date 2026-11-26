@@ -26,3 +26,4 @@ build-backend = "uv_build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
+markers = ["slow: long-running concurrency tests (still part of the default run)"]

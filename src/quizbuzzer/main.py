@@ -23,7 +23,19 @@ from quizbuzzer.api.schemas import PreviewResponse
 from quizbuzzer.config import PASSCODE_MISSING, ConfigError, Settings, load_settings
 from quizbuzzer.models import SpreadsheetInfo, TabData
 from quizbuzzer.realtime.hub import RealtimeHub
-from quizbuzzer.services.participation_service import ParticipationService
+from quizbuzzer.services.participation_service import (
+    ActivityEnded,
+    AlreadyJoined,
+    AlreadySubmitted,
+    GroupChangeRefused,
+    InvalidAnswers,
+    InvalidJoin,
+    JoinRefused,
+    NotAMember,
+    NotOpen,
+    ParticipationService,
+    UnitNotFound,
+)
 from quizbuzzer.services.activity_service import (
     ActivityNotFound,
     ActivityService,
@@ -193,6 +205,38 @@ def _register_phase_errors(app: FastAPI) -> None:
     )
 
 
+def _register_student_errors(app: FastAPI) -> None:
+    """002 contracts/rest-api.md › Student API. Details carry only the student's own data."""
+    register_error(
+        app, InvalidJoin, 422, "invalid_join", lambda e: str(e),
+        lambda e: {"field": e.field, "max": e.max},  # type: ignore[attr-defined]
+    )
+    register_error(
+        app, JoinRefused, 409, "join_refused", lambda e: str(e),
+        lambda e: {"phase": e.phase.value if e.phase else None},  # type: ignore[attr-defined]
+    )
+    register_error(app, AlreadyJoined, 409, "already_joined", lambda e: str(e))
+    register_error(app, NotAMember, 401, "not_a_member", lambda e: str(e))
+    register_error(
+        app, GroupChangeRefused, 409, "group_change_refused", lambda e: str(e),
+        lambda e: {"phase": e.phase.value},  # type: ignore[attr-defined]
+    )
+    register_error(
+        app, InvalidAnswers, 422, "invalid_answers", lambda e: str(e),
+        lambda e: {  # type: ignore[attr-defined]
+            "subParts": e.sub_parts,
+            "reasons": {str(k): r for k, r in e.reasons.items()},
+        },
+    )
+    register_error(app, NotOpen, 409, "not_open", lambda e: str(e))
+    register_error(app, ActivityEnded, 409, "activity_ended", lambda e: str(e))
+    register_error(app, UnitNotFound, 404, "unit_not_found", lambda e: str(e))
+    register_error(
+        app, AlreadySubmitted, 409, "already_submitted", lambda e: str(e),
+        lambda e: {"submission": e.submission},  # type: ignore[attr-defined]
+    )
+
+
 def _register_auth_errors(app: FastAPI) -> None:
     """002 contracts/rest-api.md › Teacher access. No details: never hint at the passcode."""
     register_error(app, WrongPasscode, 401, "wrong_passcode", "Wrong passcode.")
@@ -232,6 +276,7 @@ def create_app(
     _register_activity_errors(app)
     _register_auth_errors(app)
     _register_phase_errors(app)
+    _register_student_errors(app)
     app.add_middleware(TeacherGuardMiddleware)
     app.include_router(auth_routes.router)
     app.include_router(teacher_routes.router)

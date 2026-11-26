@@ -171,6 +171,24 @@ after the phase check, because it needs the unit's slots.
 
 ---
 
+## Student error messages and membership rules (recorded during implementation, 2026-11-27)
+
+| code | message |
+|---|---|
+| `invalid_join` | "Enter a name of 1–20 characters." / "Choose a group from 1 to N." |
+| `join_refused` | no activity: "There is no activity to join right now."; requested activity CLOSED: "This activity has ended; it can no longer be joined."; other: "That activity is no longer the current one. Reload the page." `details.phase` is the phase of the **requested** `activityId`, or `null` if it does not exist |
+| `already_joined` | "You have already joined this activity." |
+| `not_a_member` | "You are not in a group of the current activity. Join a group first." |
+| `group_change_refused` | OPEN: "Groups are fixed once the activity has opened."; CLOSED: "The activity has ended; groups can no longer change." |
+| `invalid_answers` | one sentence per failing sub-part: "Answer （k） is empty." / "… is longer than 200 characters." / "… does not belong to this question." / "… is missing." / "… was sent twice." |
+| `unit_not_found` | "That question is not part of this activity." |
+
+Membership rule used by change group and submit: the cookie's participant is the caller. If a
+current (DRAFT/OPEN) activity exists and the participant belongs to another activity, the answer
+is `not_a_member`. Otherwise the participant's own activity phase applies: for a member of the
+latest CLOSED activity with no newer current one, submit gives `activity_ended` and change group
+gives `group_change_refused` (phase CLOSED).
+
 ## Shapes
 
 ### Dashboard (teacher only)
