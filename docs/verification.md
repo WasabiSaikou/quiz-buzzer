@@ -10,20 +10,20 @@ a real Google sheet shared with the service account, with the app started as des
 quickstart §3. Fill in **Result** (pass / fail, with what was observed) and **Evidence** (a
 screenshot path, timing, or log excerpt with no secrets or personal data, per Principle VI).
 
-**Date**: ______ · **Tester**: ______ · **Commit**: ______ · **Sheet(s) used**: ______
+**Date**: 20261126 · **Tester**: WasabiSaikou · **Commit**: e135676 · **Sheet(s) used**: [single](https://docs.google.com/spreadsheets/d/1T35mUGwxOpfsltzi1YurilbgpXpirtrjkRsfbFtH0dk/edit?usp=sharing), [group](https://docs.google.com/spreadsheets/d/1if3VDYXT8NL9d5DS_jNzQVIswmFJlbuhG1BW8jSkHbo/edit?usp=sharing), [mixed](https://docs.google.com/spreadsheets/d/13NBGj5KTc5F4sklJdHcjDJxtU1s8pPEx90F9Rq_cCwc/edit?usp=sharing)
 
 | # | Steps | Expected | Result | Evidence |
 |---|---|---|---|---|
-| M1 | Paste a link to a sheet **not** shared with the service account | Error shows the service account email and says to share as Viewer (FR-004) | | |
-| M2 | Paste `https://example.com/x` | "Not a Google Sheets link"; no Google request in the server log (FR-002) | | |
-| M3 | Share a course template, paste its link. Time from paste to preview. | First tab preselected; preview lists every question with type, sub-part count and answer cell (`tab!A1`); preview appears within 5 s (SC-001) | | |
-| M4 | Paste the same link with `#gid=` of the second tab | Second tab preselected (FR-003) | | |
-| M5 | Add `備註` in the 題號 column, refresh the preview | Warning names the row and `備註`, and says what to change (FR-008a, FR-016, SC-004) | | |
-| M6 | Confirm with 6 groups (acknowledging warnings). Time from M3's paste to the DRAFT activity. | DRAFT activity shown with 6 groups and the same slots; a second open `/teacher` tab updates without reloading; under 2 minutes (SC-003) | | |
-| M7 | Try to create another activity | Refused: names the current DRAFT activity and suggests re-import (FR-020a) | | |
-| M8 | Edit the sheet (add a question), re-import, confirm | The activity now has the new question set; phase and group count unchanged (FR-024, FR-025) | | |
-| M9 | Preview, then edit the sheet structure, then confirm | Refused with the updated preview (FR-022) | | |
-| M10 | Open the sheet's version history after M3–M9 | No edits by the service account (FR-005, SC-005) | | |
+| M1 | Paste a link to a sheet **not** shared with the service account | Error shows the service account email and says to share as Viewer (FR-004) | Works | ss N/A |
+| M2 | Paste `https://example.com/x` | "Not a Google Sheets link"; no Google request in the server log (FR-002) | works | ss N/A |
+| M3 | Share a course template, paste its link. Time from paste to preview. | First tab preselected; preview lists every question with type, sub-part count and answer cell (`tab!A1`); preview appears within 5 s (SC-001) | about 2s | |
+| M4 | Paste the same link with `#gid=` of the second tab | Second tab preselected (FR-003) | works | ss N/A |
+| M5 | Add `備註` in the 題號 column, refresh the preview | Warning names the row and `備註`, and says what to change (FR-008a, FR-016, SC-004) | works | |
+| M6 | Confirm with 6 groups (acknowledging warnings). Time from M3's paste to the DRAFT activity. | DRAFT activity shown with 6 groups and the same slots; a second open `/teacher` tab updates without reloading; under 2 minutes (SC-003) | under 30s | |
+| M7 | Try to create another activity | Refused: names the current DRAFT activity and suggests re-import (FR-020a) | works | |
+| M8 | Edit the sheet (add a question), re-import, confirm | The activity now has the new question set; phase and group count unchanged (FR-024, FR-025) | works | |
+| M9 | Preview, then edit the sheet structure, then confirm | Refused with the updated preview (FR-022) | works | |
+| M10 | Open the sheet's version history after M3–M9 | No edits by the service account (FR-005, SC-005) | correct | |
 
 ## 2. Automated tests
 
