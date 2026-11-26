@@ -372,18 +372,18 @@ no message at all.
 
 ### Tests for User Story 4 (write first, observe failing) ⚠️
 
-- [ ] T040 [P] [US4] Write `tests/unit/test_group_push.py` with a recording hub holding sockets keyed for (a, 3), (a, 3), (a, 5) and `None`:
+- [X] T040 [P] [US4] Write `tests/unit/test_group_push.py` with a recording hub holding sockets keyed for (a, 3), (a, 3), (a, 5) and `None`:
   - after `submit`, `join` and `leave` in group 3, `send_many` targets exactly the two (a, 3) sockets;
   - each payload's `group.submissions` and `members` belong to group 3 only;
   - the (a, 5) and `None` sockets receive nothing;
   - a refused submit sends nothing to any student.
-- [ ] T041 [P] [US4] Write `tests/integration/test_visibility_leak.py` (SC-005, Constitution III, **visibility test first**):
+- [X] T041 [P] [US4] Write `tests/integration/test_visibility_leak.py` (SC-005, Constitution III, **visibility test first**):
   - one recording student in group 1 keeps every `/ws/student` message and every HTTP response it receives;
   - during a full OPEN activity, the other 5 groups each submit every unit with unique marker answers (`LEAK-g{n}-u{m}`) and unique display names;
   - group 1 also triggers its own errors: `already_submitted`, and `invalid_answers` while another group's submission exists;
   - until end, assert that the recorded text contains no other group's markers or names, no `"rank"` or `"isWinner"` key, and no group number other than 1;
   - assert that the number of messages the recorder received did not change when another group submitted, by comparing counts before and after each foreign submission (FR-023: even timing must not leak).
-- [ ] T042 [P] [US4] Extend `tests/integration/test_ws_student.py`:
+- [X] T042 [P] [US4] Extend `tests/integration/test_ws_student.py`:
   - teammates on two sockets see unit 1 submitted with answers and the submitter's display name within the same test step;
   - the member list updates after a teammate joins;
   - after a DRAFT leave, the old group's sockets get the updated member list;
@@ -393,8 +393,8 @@ no message at all.
 
 ### Implementation for User Story 4
 
-- [ ] T043 [US4] In `src/quizbuzzer/services/participation_service.py`, call `publish_group_state(activity_id, group_number)` after the commit of every successful `join`, `leave` and `submit`, and never on refusal. Makes T040 – T042 pass.
-- [ ] T044 [US4] In `src/quizbuzzer/static/student.js`, when a `student.state` marks a unit as submitted, make that unit read-only. Replace any unsent text with the group's submitted answers and show "Submitted by <name>" (US4 AS2). Show the own group's member list on the waiting and answering screens (FR-022).
+- [X] T043 [US4] In `src/quizbuzzer/services/participation_service.py`, call `publish_group_state(activity_id, group_number)` after the commit of every successful `join`, `leave` and `submit`, and never on refusal. Makes T040 – T042 pass.
+- [X] T044 [US4] In `src/quizbuzzer/static/student.js`, when a `student.state` marks a unit as submitted, make that unit read-only. Replace any unsent text with the group's submitted answers and show "Submitted by <name>" (US4 AS2). Show the own group's member list on the waiting and answering screens (FR-022).
 
 **Checkpoint**: teammates stay in sync, and the leak test proves isolation.
 

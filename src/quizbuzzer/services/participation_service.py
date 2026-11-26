@@ -366,12 +366,17 @@ class ParticipationService:
             raise NotAMember()  # a membership of an older activity never carries over
         return participant, db.get_activity_phase(conn, participant.activity_id)
 
-    # --- after-commit hooks (US3 teacher dashboard, US4 group push) ---------------------------
+    # --- after-commit hooks: group push (US4) and teacher dashboard (US3) ---------------------
+
+    # Called only after a successful commit, never on refusal. A submission sends nothing at
+    # all to other groups' sockets, so not even the timing of a message leaks (FR-023).
 
     def _after_group_change(self, activity_id: int, group_number: int) -> None:
+        self.publish_group_state(activity_id, group_number)  # FR-022: members update
         self._publish_teacher(activity_id)
 
     def _after_submission(self, activity_id: int, group_number: int) -> None:
+        self.publish_group_state(activity_id, group_number)  # FR-021: teammates see it
         self._publish_teacher(activity_id)
 
     def _publish_teacher(self, activity_id: int) -> None:
