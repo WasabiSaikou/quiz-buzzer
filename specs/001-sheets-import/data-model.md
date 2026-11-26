@@ -28,7 +28,7 @@ Index `one_current_activity`: partial unique index allowing at most one row with
 | Field | Column | Type | Rules |
 |---|---|---|---|
 | id | id | INTEGER PK | |
-| — | activity_id | INTEGER NOT NULL | FK → activities.id ON DELETE CASCADE |
+| activity_id *(FK; not drawn in diagram)* | activity_id | INTEGER NOT NULL | FK → activities.id ON DELETE CASCADE |
 | number | number | INTEGER NOT NULL | > 0; UNIQUE(activity_id, number) (duplicates are an import error) |
 | kind | kind | TEXT NOT NULL | CHECK in (`SINGLE`,`GROUP_SET`) |
 | sourceRow | source_row | INTEGER NOT NULL | 1-based row of the numbered row |
@@ -39,7 +39,7 @@ Index `one_current_activity`: partial unique index allowing at most one row with
 | Field | Column | Type | Rules |
 |---|---|---|---|
 | id | id | INTEGER PK | |
-| — | unit_id | INTEGER NOT NULL | FK → question_units.id ON DELETE CASCADE |
+| unit_id *(FK; not drawn in diagram)* | unit_id | INTEGER NOT NULL | FK → question_units.id ON DELETE CASCADE |
 | subPart | sub_part | INTEGER NOT NULL | > 0; 1 for SINGLE; UNIQUE(unit_id, sub_part) |
 | cellRow | cell_row | INTEGER NOT NULL | 1-based; top-left of merge if merged |
 | cellColumn | cell_column | INTEGER NOT NULL | 1-based |
@@ -52,7 +52,7 @@ Invariants checked by tests: a unit has ≥ 1 slot; `kind = GROUP_SET` ⇔ slot 
 | Type | Fields |
 |---|---|
 | `SpreadsheetInfo` | spreadsheet_id, title, tabs: list[`TabInfo`(sheet_id, title, index)], requested_gid: int \| None |
-| `TabData` | sheet_id, title, grid: list[list[str]], merges: list[(r0, r1, c0, c1)] |
+| `TabData` | spreadsheet_id, spreadsheet_title, sheet_id, title (tab title), grid: list[list[str]] (displayed values; ragged rows allowed), merges: list[(r0, r1, c0, c1)] (0-based, half-open; research R2) |
 | `HeaderInfo` | row, number_column, answer_column (1-based) |
 | `ParsedSlot` | sub_part, row, column, a1_ref, existing_text |
 | `ParsedUnit` | number, kind, source_row, slots: list[ParsedSlot] |
@@ -67,7 +67,7 @@ fingerprint and returning it to the API.
 
 | Code | Severity | Spec |
 |---|---|---|
-| `header_not_found` | error | Edge: no header; message names 題號 and 作答 |
+| `header_not_found` | error | Edge: no single row holds both labels; message names 題號 and 作答. If both labels exist but only in different rows, the message also names those cells (spec edge case "labels in different rows") |
 | `header_ambiguous` | error | label appears twice in header row; names the cells |
 | `no_questions` | error | zero numbered rows |
 | `duplicate_question_number` | error | FR-008a |

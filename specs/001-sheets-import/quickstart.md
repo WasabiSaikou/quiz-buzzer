@@ -12,16 +12,24 @@ tables in [data-model.md](data-model.md).
   `quiz-buzzer\secrets\` (gitignored). The key is never committed or pasted anywhere
   (Principle VI).
 
-## 1. Environment (outer-folder venv, uv-managed)
+## 1. Environment (project-local `.venv`, uv-managed)
 
-The project venv is `SWE-Voting-System\.venv` (one level above `quiz-buzzer`). It must be a uv
-CPython venv; see [research.md R1](research.md#r1-python-environment-and-uv--needs-team-action).
+The venv is `quiz-buzzer\.venv`, which `uv sync` creates. **Do not touch** the outer
+`SWE-Voting-System\.venv`. It is an MSYS2 Python that uv cannot use; see
+[research.md R1](research.md#r1-python-environment-and-uv).
 
 ```powershell
 cd C:\path\to\SWE-Voting-System\quiz-buzzer
-$env:UV_PROJECT_ENVIRONMENT = "..\.venv"   # or set once as a user environment variable
-uv sync                                     # installs runtime + dev deps from uv.lock
+deactivate 2>$null                 # if the outer .venv is active in this shell
+uv python find 3.11                # which 3.11 would uv use?
+# Only if it finds nothing, or only MSYS2/mingw interpreters (C:\msys64\..., ..\.venv\bin\...):
+uv python install 3.11             # uv-managed official CPython
+uv python pin 3.11                 # writes .python-version (committed)
+uv sync                            # creates .\.venv; installs runtime + dev deps from uv.lock
 ```
+
+`.python-version` is committed, so on a fresh clone `uv sync` alone picks the pinned 3.11. It
+still needs `uv python install 3.11` once on a machine that only has MSYS2 Python.
 
 ## 2. Configuration
 

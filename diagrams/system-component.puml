@@ -21,8 +21,8 @@ node "Local server (single process: quizbuzzer.main)" {
   component "Sheets adapter" as SA {
     interface "SheetsAdapter" as SAI
     [GoogleSheetsAdapter\nservices/google_sheets_adapter.py] as GSAD
-    [sheets_url.py:\nparse_spreadsheet_url] as URL
   }
+  [URL parsing\nservices/sheets_url.py:\nparse_spreadsheet_url] as URL
   database "SQLite store\ndb.py + quizbuzzer.db" as DB
 }
 
@@ -39,12 +39,12 @@ RT ..> TUI : WebSocket push\n(activity state)
 RT ..> SUI : WebSocket push\n(phase / own group state;\nlater feature)
 
 API --> ACT : all commands and queries
-ACT --> SAI : list_tabs / read_tab
+ACT --> SAI : list_tabs(spreadsheet_id) /\nread_tab(spreadsheet_id, sheet_id)
 ACT --> PARSER : parse(grid, merges)
 ACT --> DB : atomic transactions
 ACT --> RT : publish activity state
 GSAD ..|> SAI
-GSAD --> URL
+ACT --> URL : parse_spreadsheet_url(url)
 GSAD --> GSA : spreadsheets.get, values.get (import)\nvalues.batchUpdate RAW (export, 003)
 
 note right of PARSER

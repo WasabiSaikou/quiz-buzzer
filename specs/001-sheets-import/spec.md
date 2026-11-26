@@ -52,6 +52,16 @@ this feature delivers only the import path.
   exists. CLOSED activities are kept with their results and CSV viewable. The teacher UI shows
   only the current (non-CLOSED) activity plus a simple list of past CLOSED ones for results.
 
+## Roles
+
+- **Teacher**: the only person who uses this feature. Pastes the sheet link, picks the tab,
+  reviews the preview, chooses the group count, confirms, and re-imports. Teacher-only access is
+  enforced by feature 002 (see Dependencies).
+- **Student groups**: not involved in this feature. They take part in an activity only after it
+  is opened, through later features.
+- **Google service account** (system actor): the app's read-only identity for Google Sheets. The
+  teacher shares each sheet with its email address as a viewer.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Preview the questions detected in a worksheet (Priority: P1)
@@ -356,8 +366,13 @@ setup) and verify re-import is refused.
   the end of the tab's data. Side-by-side or stacked tables in one tab are not supported.
 - The activity is named from the spreadsheet title and tab name; renaming is out of scope.
 - The group count field is prefilled with 4.
-- Non-goals: importing question text or correct answers; Excel/CSV upload; automatic grading;
-  editing questions in the app.
+
+## Non-Goals
+
+- Importing question text or correct answers.
+- Excel or CSV upload. Import is from Google Sheets only.
+- Automatic grading.
+- Editing questions in the app. Fix the sheet and re-import instead (User Story 3).
 
 ## Dependencies
 

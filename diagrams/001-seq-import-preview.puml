@@ -16,12 +16,12 @@ participant "Google Sheets API" as GSA
 Teacher -> TUI : paste spreadsheet URL
 TUI -> API : POST /api/teacher/import/tabs {url}
 API -> ACT : list_tabs(url)
-ACT -> SA : list_tabs(url)
+ACT -> ACT : parse_spreadsheet_url(url)\n-> spreadsheet_id, gid (sheets_url.py)
 alt URL is not a Google Sheets spreadsheet link
-  SA --> ACT : raise InvalidSheetUrl
-  ACT --> API : InvalidSheetUrl
+  ACT --> API : raise InvalidSheetUrl\n(no adapter call)
   API --> TUI : 400 invalid_url
 else valid URL
+  ACT -> SA : list_tabs(spreadsheet_id)
   SA -> GSA : spreadsheets.get (title, tab properties; read-only)
   alt not shared with service account
     GSA --> SA : 403
@@ -48,10 +48,11 @@ end
 Teacher -> TUI : keep preselected tab or select another
 TUI -> API : POST /api/teacher/import/preview {url, sheetId}
 API -> ACT : preview_import(url, sheet_id)
-ACT -> SA : read_tab(url, sheet_id)
-SA -> GSA : values.get FORMATTED_VALUE\n+ spreadsheets.get merges (read-only)
-GSA --> SA : cell values, merges
-SA --> ACT : TabData(grid, merges)
+ACT -> ACT : parse_spreadsheet_url(url)
+ACT -> SA : read_tab(spreadsheet_id, sheet_id)
+SA -> GSA : spreadsheets.get titles + merges\n+ values.get FORMATTED_VALUE (read-only)
+GSA --> SA : titles, cell values, merges
+SA --> ACT : TabData(titles, grid, merges)\n(unknown sheet_id -> SheetNotFound)
 ACT -> PARSER : parse(grid, merges)
 PARSER -> PARSER : find header row (題號 / 作答;\nwhitespace ignored)
 PARSER -> PARSER : scan rows below header:\nnumbered rows (n, n., n、, Qn, qn;\nhalf/full-width digits),\n（k）/(k) markers, skip blank rows
@@ -59,8 +60,9 @@ PARSER -> PARSER : unrecognised 題號 cell ->\nwarning (row + content)
 PARSER -> PARSER : unnumbered row with non-marker\nanswer text -> no slot, warning\n(cell + text)
 PARSER -> PARSER : any slot cell with text beyond\nits own marker -> warning\n(cell + text; export will replace it)
 PARSER -> PARSER : classify SINGLE / GROUP_SET (題組),\ncompute answer cell per slot
-PARSER -> PARSER : collect errors and warnings\n(row / cell + remedy), fingerprint
-PARSER --> ACT : ImportPreview
+PARSER -> PARSER : collect errors and warnings\n(row / cell + remedy)
+PARSER --> ACT : ImportPreview (no source identity)
+ACT -> ACT : add spreadsheet / tab identity,\ncompute_fingerprint(...)
 ACT --> API : ImportPreview
 API --> TUI : 200 units, slots, issues,\ntotals, fingerprint, canConfirm
 TUI --> Teacher : show preview\n(confirm disabled if errors)

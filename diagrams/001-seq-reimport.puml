@@ -23,19 +23,21 @@ alt phase is OPEN or CLOSED
   ACT --> API : raise ReimportRefused(phase)
   API --> TUI : 409 reimport_refused\n"activity is <phase>"
 else phase is DRAFT
-  ACT -> SA : read_tab(url, sheet_id)
+  ACT -> SA : read_tab(spreadsheet_id, sheet_id)
   SA --> ACT : TabData(grid, merges)
   ACT -> PARSER : parse(grid, merges)
   PARSER --> ACT : ImportPreview
+  ACT -> ACT : add identity, compute_fingerprint(...)
   ACT --> API : ImportPreview
   API --> TUI : 200 preview (errors / warnings)
   Teacher -> TUI : confirm replacement
   TUI -> API : PUT /api/teacher/activities/{id}/questions\n{url, sheetId, fingerprint, acknowledgeWarnings}
   API -> ACT : replace_questions(...)
-  ACT -> SA : read_tab(url, sheet_id)
+  ACT -> SA : read_tab(spreadsheet_id, sheet_id)
   SA --> ACT : TabData(grid, merges)
   ACT -> PARSER : parse(grid, merges)
   PARSER --> ACT : ImportPreview
+  ACT -> ACT : add identity, compute_fingerprint(...)
   alt errors / fingerprint differs / warnings not acknowledged
     ACT --> API : raise ImportHasErrors /\nPreviewChanged / WarningsNotAcknowledged
     API --> TUI : 422 / 409 / 422

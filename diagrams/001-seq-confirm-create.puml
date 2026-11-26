@@ -21,10 +21,11 @@ alt groupCount outside 2-12
   ACT --> API : raise InvalidGroupCount
   API --> TUI : 422 invalid_group_count
 else valid
-  ACT -> SA : read_tab(url, sheet_id)
+  ACT -> SA : read_tab(spreadsheet_id, sheet_id)
   SA --> ACT : TabData(grid, merges)
   ACT -> PARSER : parse(grid, merges)
   PARSER --> ACT : ImportPreview
+  ACT -> ACT : add identity, compute_fingerprint(...)
   alt preview has errors
     ACT --> API : raise ImportHasErrors(preview)
     API --> TUI : 422 import_errors (confirmation blocked)

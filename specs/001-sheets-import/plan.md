@@ -34,8 +34,9 @@ The diagrams are the primary blueprint. The plan's module and class names match 
 | API server | `main.py` (`create_app`, `app`), `api/teacher_routes.py`, `api/ws_routes.py`, `api/schemas.py` |
 | Real-time channel | `realtime/hub.py`: `RealtimeHub` |
 | Activity service | `services/activity_service.py`: `ActivityService` (`list_tabs`, `preview_import`, `create_from_import`, `check_reimport_allowed`, `preview_reimport`, `replace_questions`, `get_current_activity`, `get_activity`) |
-| Guided Notes parser | `services/guided_notes_parser.py`: `parse(grid, merges) -> ImportPreview` |
-| Sheets adapter | `services/sheets_adapter.py`: `SheetsAdapter` (Protocol), errors `InvalidSheetUrl`, `SheetNotShared`, `SheetNotFound`, `SheetsUnavailable`; `services/google_sheets_adapter.py`: `GoogleSheetsAdapter`; `services/sheets_url.py`: `parse_spreadsheet_url`; tests: `tests/fakes/fake_sheets_adapter.py`: `FakeSheetsAdapter` |
+| Guided Notes parser | `services/guided_notes_parser.py`: `parse(grid, merges) -> ImportPreview`; pure helper `compute_fingerprint(...)`, called by `ActivityService` |
+| Sheets adapter | `services/sheets_adapter.py`: `SheetsAdapter` (Protocol: `list_tabs(spreadsheet_id)`, `read_tab(spreadsheet_id, sheet_id)`), errors `InvalidSheetUrl`, `SheetNotShared`, `SheetNotFound`, `SheetsUnavailable`; `services/google_sheets_adapter.py`: `GoogleSheetsAdapter`; tests: `tests/fakes/fake_sheets_adapter.py`: `FakeSheetsAdapter` |
+| URL parsing | `services/sheets_url.py`: `parse_spreadsheet_url`, called by `ActivityService` before any adapter call |
 | SQLite store | `db.py` (connection, schema, queries) and the DB file at `QUIZBUZZER_DB_PATH` |
 | Domain classes | `models.py`: `Phase`, `UnitKind`, `Activity`, `QuestionUnit`, `AnswerSlot` (+ transient `SpreadsheetInfo`, `TabData`, `ImportPreview`, `Issue`, …) |
 | Service exceptions (sequence diagrams) | `services/activity_service.py`: `InvalidGroupCount`, `ImportHasErrors`, `PreviewChanged`, `WarningsNotAcknowledged`, `CurrentActivityExists`, `ReimportRefused` |
@@ -43,6 +44,9 @@ The diagrams are the primary blueprint. The plan's module and class names match 
 **Diagram changes made during planning** (re-rendered 2026-11-26):
 - The parser moved out of the Sheets adapter and is now called by `ActivityService`. This keeps
   the parser pure and lets the fake adapter supply grids.
+- URL parsing moved out of the Sheets adapter too: `ActivityService` calls
+  `parse_spreadsheet_url`, and the adapter takes a `spreadsheet_id`. The fingerprint is computed
+  by `ActivityService` after `parse()` (re-rendered 2026-11-26, during `/speckit-analyze`).
 - The API now calls `ActivityService` for everything.
 - Participants are named after their classes and modules, and HTTP routes and status codes were
   added.
@@ -54,8 +58,9 @@ The diagrams are the primary blueprint. The plan's module and class names match 
 ## Technical Context
 
 **Language/Version**: Python 3.11 (`requires-python = ">=3.11"`), managed with uv. The venv is
-`..\.venv` via `UV_PROJECT_ENVIRONMENT` (see research R1: the venv must be recreated as a uv
-CPython venv).
+the project-local `quiz-buzzer\.venv` created by `uv sync`. Python is pinned with `uv python pin
+3.11` (`.python-version`) and installed with `uv python install 3.11` when only MSYS2 Pythons
+exist. The outer `..\.venv` is not touched (research R1).
 
 **Primary Dependencies**: FastAPI, uvicorn + websockets, python-dotenv,
 google-api-python-client, google-auth. Dev: pytest, httpx.
@@ -63,7 +68,7 @@ google-api-python-client, google-auth. Dev: pytest, httpx.
 **Storage**: SQLite through the stdlib `sqlite3` module (WAL, foreign keys, `BEGIN IMMEDIATE`).
 
 **Testing**: pytest + FastAPI `TestClient`. `FakeSheetsAdapter` is fed from
-`tests/fixtures/sheets/*.json`.
+`tests/fixtures/sheets/*.json` and `*.csv` (research R9).
 
 **Target Platform**: Windows 10/11 teacher laptop; students' browsers on the classroom LAN.
 
@@ -88,7 +93,7 @@ calls plus an O(rows) parse.
 | Principle | How this plan complies | Pre | Post |
 |---|---|---|---|
 | I. Server-authoritative fairness | No ranking in 001. Create and re-import use `BEGIN IMMEDIATE` with a partial unique index, so two current activities are impossible, not just unlikely. The ranking design (`BEGIN IMMEDIATE` + `UNIQUE(group_id, unit_id)`, server `arrival_seq`) is recorded for the submissions feature. | ✅ | ✅ |
-| II. Dynamic Guided Notes handling | `parse(grid, merges)` derives the header, columns, rows and slots from content only. The A1 reference is computed from row/column indices. The parser suite runs against at least 3 differently shaped fixtures (2 course templates + `shifted_layout`). | ✅ | ✅ |
+| II. Dynamic Guided Notes handling | `parse(grid, merges)` derives the header, columns, rows and slots from content only. The A1 reference is computed from row/column indices. The parser suite runs against at least 3 differently shaped fixtures (`template_single`, `template_group` + `shifted_layout`). | ✅ | ✅ |
 | III. Information hiding until close | 001 only has teacher endpoints and sockets; no group data exists yet. The student channel is deferred, and the visibility filter is required there. | ✅ (N/A) | ✅ (N/A) |
 | IV. Single source of truth for phase | Phase lives only in SQLite. `activity.state` is pushed after every change and sent on connect, so reconnecting clients recover. | ✅ | ✅ |
 | V. Test-first for core rules | Parser, phase rules (create/re-import refusal, one current activity) and fingerprint/confirm tests are written and seen failing before the code. `verification.md` holds the manual records M1–M10 (quickstart). Export tests belong to 003. | ✅ | ✅ |
@@ -96,8 +101,8 @@ calls plus an O(rows) parse.
 | VII. Consistency and simplicity | The diagrams were updated in this plan. No ORM, no frontend build, no `uvicorn[standard]`. Only tables for 001 are created. The README dependency/licence table comes from research R10. | ✅ | ✅ |
 | VIII. PlantUML design-first | The diagrams drive the module names (table above). They were re-rendered with `java -jar tools/plantuml.jar "./diagrams/*.puml"` (exit 0). `/speckit-implement` must end with a code-vs-diagram check. | ✅ | ✅ |
 
-**Open item, not a constitution violation**: research R1. The outer `.venv` is an MSYS2/mingw
-Python that uv cannot use, and the team must recreate it before implementation.
+**Environment note** (research R1, no open item): the outer `.venv` is an MSYS2/mingw Python that
+uv cannot use. It is left untouched, and the project uses its own uv-managed `.venv`.
 
 ## Project Structure
 
@@ -123,6 +128,7 @@ specs/001-sheets-import/
 ```text
 pyproject.toml                 # uv project; requires-python >=3.11
 uv.lock
+.python-version                # uv python pin 3.11 (committed); .venv/ is gitignored
 .env.example                   # placeholders only
 README.md                      # run instructions + dependency/licence table
 diagrams/                      # *.puml + rendered *.png
@@ -155,9 +161,12 @@ tests/
 ├── fakes/
 │   └── fake_sheets_adapter.py # FakeSheetsAdapter
 ├── fixtures/sheets/
-│   ├── course_template_a.json # copy of course template A (team-supplied, de-identified)
-│   ├── course_template_b.json # copy of course template B (team-supplied, de-identified)
+│   ├── template_single.csv    # course template, 6 single questions (team-supplied)
+│   ├── template_single.expected.json
+│   ├── template_group.csv     # course template, 題組 + single questions (team-supplied)
+│   ├── template_group.expected.json
 │   ├── shifted_layout.json    # synthetic, differently shaped
+│   ├── shifted_layout.expected.json
 │   └── edge_cases/*.json      # small grids, one per edge case
 ├── unit/
 │   ├── test_guided_notes_parser.py

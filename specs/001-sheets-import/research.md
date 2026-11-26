@@ -5,22 +5,26 @@
 The stack was fixed by the team (see plan input). This document records the decisions needed to
 apply it to this feature, and the one environment conflict found while checking the machine.
 
-## R1. Python environment and uv (⚠ needs team action)
+## R1. Python environment and uv
 
-- **Finding**: The agreed environment is the outer folder's `.venv`
-  (`SWE-Voting-System/.venv`). On inspection (2026-11-26) it is an **MSYS2/mingw** CPython
-  3.11.7 venv created `--without-pip` (platform `mingw_x86_64`, `bin/` layout). `uv 0.13.10`
-  refuses it: "Unknown operating system: `mingw_x86_64`". Mingw Python also lacks prebuilt
-  wheels for `pydantic-core` (required by FastAPI), so installs would try to compile Rust.
-- **Decision**: Keep the venv in the outer folder, but recreate it as a uv-managed official
-  CPython 3.11 venv: `uv venv ..\.venv --python 3.11`, and point uv at it with
-  `UV_PROJECT_ENVIRONMENT=..\.venv` (set in the shell or user environment, not in `.env`).
-  No venv is created inside `quiz-buzzer/`.
-- **Rationale**: Satisfies both team decisions (outer venv; uv-managed project) with a Python uv
-  and all wheels support.
-- **Alternatives considered**: keep mingw venv and use pip (breaks the uv decision; pydantic-core
-  build risk); default uv `.venv` inside `quiz-buzzer/` (team declined).
-- **Action**: Deleting/recreating `..\.venv` is a team decision; not done by this plan.
+- **Finding**: The outer folder's `.venv` (`SWE-Voting-System/.venv`) is an **MSYS2/mingw**
+  CPython 3.11.7 venv (platform `mingw_x86_64`, `bin/` layout). `uv 0.13.10` refuses it:
+  "Unknown operating system: `mingw_x86_64`". On this machine (checked 2026-11-26) the only
+  other Pythons are also MSYS2 builds (`C:\msys64\mingw64\bin\python.exe`). Mingw Python also
+  lacks prebuilt wheels for `pydantic-core` (required by FastAPI).
+- **Decision** (team, 2026-11-26): **do not touch `..\.venv`.** Use a project-local
+  `quiz-buzzer\.venv` that `uv sync` creates. If `uv python find 3.11` finds only MSYS2
+  interpreters, run `uv python install 3.11` (a uv-managed official CPython) and pin it with
+  `uv python pin 3.11`. That writes `.python-version`, which is committed. `.venv/` is
+  gitignored. `UV_PROJECT_ENVIRONMENT` is not used.
+- **Rationale**: This is uv's default layout, so no environment variables are needed. It leaves
+  the outer venv untouched for whatever else uses it, and gives a Python that all the wheels
+  support.
+- **Note**: if the outer `.venv` is activated in the shell (`VIRTUAL_ENV` set), uv warns that it
+  does not match the project environment and uses `quiz-buzzer\.venv` anyway. Deactivate it to
+  silence the warning.
+- **Alternatives considered**: recreate `..\.venv` as a uv venv (team declined: it must not be
+  touched); keep the mingw venv and use pip (breaks the uv decision; pydantic-core build risk).
 
 ## R2. Parser input: grid plus merges
 
@@ -69,10 +73,15 @@ missing k in 1..max → `sub_part_gap` warning. Marker rows above the first numb
 ## R5. Reading the sheet (GoogleSheetsAdapter)
 
 - **Decision**:
-  - `list_tabs`: `spreadsheets.get(fields="properties.title,sheets.properties(sheetId,title,index)")`.
-  - `read_tab`: `spreadsheets.get(fields="sheets(properties.sheetId,merges)")` for merges, plus
-    `values.get(range="'<title>'", valueRenderOption="FORMATTED_VALUE")`; single quotes in
-    tab titles are doubled.
+  - The adapter takes a `spreadsheet_id`, never a URL. `ActivityService` parses the URL first
+    (see URL parsing below).
+  - `list_tabs(spreadsheet_id)`: `spreadsheets.get(fields="properties.title,sheets.properties(sheetId,title,index)")`.
+  - `read_tab(spreadsheet_id, sheet_id)`: first
+    `spreadsheets.get(fields="properties.title,sheets(properties(sheetId,title),merges)")`. That
+    gives the spreadsheet title, the tab title for the requested `sheetId`, and its merges. If no
+    tab has that `sheetId`, raise `SheetNotFound`. Then
+    `values.get(range="'<tab title>'", valueRenderOption="FORMATTED_VALUE")`, with single quotes
+    in tab titles doubled. That makes two calls per preview (SC-001).
   - Credentials: `google.oauth2.service_account.Credentials.from_service_account_file(path,
     scopes=[spreadsheets.readonly])` for import. Export (003) will use the `spreadsheets` scope
     and `values.batchUpdate` with `valueInputOption=RAW`.
@@ -82,9 +91,10 @@ missing k in 1..max → `sub_part_gap` warning. Marker rows above the first numb
 - **Rationale**: FORMATTED_VALUE matches what the teacher sees (spec assumption). Reading by
   `sheetId` rather than title survives tab renames between preview and confirm. The read-only
   scope enforces FR-005 at the credential level.
-- **URL parsing** (`sheets_url.parse_spreadsheet_url`): accept `https://docs.google.com/
-  spreadsheets/d/<id>/…` with an optional `#gid=<n>` (or `?gid=` / `&gid=`). Anything else
-  raises `InvalidSheetUrl` with no network call (FR-002).
+- **URL parsing** (`sheets_url.parse_spreadsheet_url`, called by `ActivityService` before any
+  adapter call): accept `https://docs.google.com/spreadsheets/d/<id>/…` with an optional
+  `#gid=<n>` (or `?gid=` / `&gid=`). Anything else raises `InvalidSheetUrl` and the adapter is
+  never called (FR-002).
 
 ## R6. Preview fingerprint (FR-022)
 
@@ -92,6 +102,9 @@ missing k in 1..max → `sub_part_gap` warning. Marker rows above the first numb
   `{spreadsheetId, sheetId, units:[{number, kind, sourceRow, slots:[{subPart, row, column}]}]}`.
   Warnings and errors are excluded, because only the structure matters. The client sends back the
   fingerprint it was shown, and confirm re-reads and re-parses the sheet and compares.
+- **Where**: the pure helper `compute_fingerprint(spreadsheet_id, sheet_id, units)` lives in
+  `guided_notes_parser.py`. `ActivityService` calls it after `parse()`, because `parse()` does
+  not know the spreadsheet or tab identity (see the sequence diagrams).
 - **Rationale**: Stateless (no server-held preview), and the client cannot inject cell locations
   because the server always uses its own re-parse.
 - **Alternatives considered**: server-side preview cache with expiry (more state, same
@@ -135,18 +148,32 @@ missing k in 1..max → `sub_part_gap` warning. Marker rows above the first numb
 
 - **Decision**:
   - `pytest` with FastAPI `TestClient` (needs `httpx`).
-  - `FakeSheetsAdapter` (in `tests/fakes/`) loads `tests/fixtures/sheets/*.json`, one file per
-    spreadsheet: `{spreadsheetId, title, tabs:[{sheetId, title, index, grid, merges}]}`. It can
-    also be set to raise `SheetNotShared`, `SheetNotFound` or `SheetsUnavailable`.
+  - `FakeSheetsAdapter` (in `tests/fakes/`) loads two fixture formats from
+    `tests/fixtures/sheets/`:
+    - `*.json`, one file per spreadsheet:
+      `{spreadsheetId, title, tabs:[{sheetId, title, index, grid, merges}]}`;
+    - `*.csv`, one file per single-tab spreadsheet, read as UTF-8 (BOM tolerated). Each file
+      becomes `spreadsheetId` = file stem, `title` = file stem, and one tab with `sheetId` 0,
+      `title` "Sheet1" and `index` 0. The grid is the CSV rows as strings, and `merges` = [] (CSV
+      cannot carry merges).
+
+    It can also be set to raise `SheetNotShared`, `SheetNotFound` or `SheetsUnavailable`.
+  - **Expected results** for each reference sheet live next to it, in
+    `<stem>.expected.json` (`{header:{row, numberColumn, answerColumn}, units:[{number, kind,
+    sourceRow, slots:[{subPart, a1Ref}]}], totals:{units, slots}, issueCodes:[…]}`). They are
+    written by hand from the sheet, not generated by the parser.
   - The app is built by `create_app(adapter=..., db_path=...)` so tests inject the fake and a
     temporary database.
-- **Fixtures (Principle II, at least 3 shapes)**: `course_template_a.json` and
-  `course_template_b.json` are copies of the two course templates, and
-  `shifted_layout.json` is synthetic, with the header lower and further right, merged
-  question-text cells, full-width markers and spacer rows. Small synthetic grids cover each edge
-  case.
-- **⚠ Input needed**: the two course templates must be supplied by the team. Any student or
-  personal data must be removed before they are committed (Principle VI).
+- **Fixtures (Principle II, at least 3 shapes)**:
+  - `template_single.csv` and `template_group.csv` are the two course templates, supplied by the
+    team on 2026-11-26. The team confirmed they contain no personal data. Both have the header at
+    row 4 (題號 in column B, 作答 in column G) and a title row above it:
+    - `template_single`: 6 single questions separated by blank spacer rows.
+    - `template_group`: two 題組 whose numbered row carries its own `（1）` marker, followed by a
+      `（2）` row, then two single questions.
+  - `shifted_layout.json` is synthetic, with a different shape: the header lower and further
+    right, merged cells, full-width markers, an implicit sub-part 1, and spacer rows inside a 題組.
+  - Small synthetic grids cover each edge case.
 - **Concurrency test**: two threads confirm at once against a file-based temp DB, and exactly one
   activity must be created.
 
