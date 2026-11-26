@@ -130,21 +130,21 @@ secrets, no student data, Principle VI).
 
 | # | Steps (short) | Expected | Result | Evidence |
 |---|---|---|---|---|
-| M11 | Start without `TEACHER_PASSCODE` | Startup fails naming `TEACHER_PASSCODE` (FR-004) | | |
-| M12 | Wrong then right passcode on `/teacher` | Locked, then unlocked (US1 AS1–2) | | |
-| M13 | Student device calls `/api/teacher/…` | 401 `teacher_required`, no data (FR-002, SC-006) | | |
-| M14 | Student page before / after import | "No activity available yet", then join form without reload (FR-031) | | |
-| M15 | Join, duplicate names, change group in DRAFT | Accepted; dashboard lists members (FR-011, FR-013, FR-028) | | |
-| M16 | Open; time screen switch | All screens switch within 1 s; change group refused (SC-001) | | |
-| M17 | Whitespace answer, then valid 題組 | Refused naming sub-part; then accepted; teammate updates, other group unchanged (SC-002) | | |
-| M18 | Teammate resubmits | "Your group has already submitted question N" (FR-018) | | |
-| M19 | Two groups submit together | Ranks 1 and 2, one winner; no rank on student screens (FR-019, FR-023) | | |
-| M20 | DevTools on another group's device | No foreign answer, group, name or rank (SC-005) | | |
-| M21 | Refresh; Wi-Fi off/on | Same screen and group state; "Reconnecting…" (FR-030, SC-007) | | |
-| M22 | End while a student keeps submitting | Closed everywhere within 1 s; refused or ranked, never both; refresh keeps final dashboard (FR-029) | | |
-| M23 | Cancel a DRAFT with students joined, re-import | Students see "No activity available yet"; import succeeds (US5) | | |
-| M24 | Cancel an OPEN activity from a second tab | "An OPEN activity can only be ended" (US5 AS4) | | |
-| M25 | Server log after M11–M24 | No passcode, names or answers (FR-004, FR-032) | | |
+| M11 | Start without `TEACHER_PASSCODE` | Startup fails naming `TEACHER_PASSCODE` (FR-004) | check | |
+| M12 | Wrong then right passcode on `/teacher` | Locked, then unlocked (US1 AS1–2) | check | |
+| M13 | Student device calls `/api/teacher/…` | 401 `teacher_required`, no data (FR-002, SC-006) | check | |
+| M14 | Student page before / after import | "No activity available yet", then join form without reload (FR-031) | check| |
+| M15 | Join, duplicate names, change group in DRAFT | Accepted; dashboard lists members (FR-011, FR-013, FR-028) | check | |
+| M16 | Open; time screen switch | All screens switch within 1 s; change group refused (SC-001) | check | |
+| M17 | Whitespace answer, then valid 題組 | Refused naming sub-part; then accepted; teammate updates, other group unchanged (SC-002) | check | |
+| M18 | Teammate resubmits | "Your group has already submitted question N" (FR-018) | check | |
+| M19 | Two groups submit together | Ranks 1 and 2, one winner; no rank on student screens (FR-019, FR-023) | check | |
+| M20 | DevTools on another group's device | No foreign answer, group, name or rank (SC-005) | check | |
+| M21 | Refresh; Wi-Fi off/on | Same screen and group state; "Reconnecting…" (FR-030, SC-007) | check | |
+| M22 | End while a student keeps submitting | Closed everywhere within 1 s; refused or ranked, never both; refresh keeps final dashboard (FR-029) | check | |
+| M23 | Cancel a DRAFT with students joined, re-import | Students see "No activity available yet"; import succeeds (US5) | check | |
+| M24 | Cancel an OPEN activity from a second tab | "An OPEN activity can only be ended" (US5 AS4) | check | |
+| M25 | Server log after M11–M24 | No passcode, names or answers (FR-004, FR-032) | check | |
 
 ## Automated test runs (002)
 
