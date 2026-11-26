@@ -174,6 +174,12 @@ setup) and verify re-import is refused.
   link is not a Google Sheets spreadsheet link; no request to the sheet is attempted.
 - **Spreadsheet or tab does not exist** (deleted, wrong ID): the teacher is told it could not be
   found.
+- **Google Sheets unavailable** (network down, timeout, an unexpected Google error, or the
+  Google Sheets API not enabled for the service account's Google Cloud project): the teacher is
+  told Google Sheets is unavailable; nothing is created or changed. "API not enabled" is
+  reported this way, not as "not shared", because sharing the sheet would not fix it.
+- **Activity does not exist** (stale page or wrong activity ID, when viewing or re-importing):
+  the teacher is told the activity could not be found; nothing is changed.
 - **Tab with no header row** (no single row contains both 題號 and 作答): error stating the
   header could not be found and naming both labels searched for, 題號 and 作答.
 - **Header labels with spaces or line breaks inside** (`題 號`, `作　答`, a line break between
@@ -188,6 +194,10 @@ setup) and verify re-import is refused.
 - **Unnumbered row with non-marker text in the answer column** (e.g., `提示：看課本p.12`): no
   slot is created and the current question continues; a warning names the cell and its text so
   the teacher can add a marker if it was meant to be a sub-part.
+- **Numbered row with text, followed by a （1） row** (e.g. question 3's answer cell reads `答：`
+  and the next marker row is （1））: the numbered row is not a slot (FR-010), so its text belongs
+  to no slot; the same warning names the cell and its text, suggesting to clear it or move the
+  （1） marker there.
 - **Blank spacer rows**: ignored; they do not end the current question, so sub-part rows after a
   spacer still belong to it.
 - **Merged question-text cells**: do not affect detection; only the question-number and answer
@@ -257,7 +267,9 @@ setup) and verify re-import is refused.
   ignored — MUST belong to the current question as sub-part k.
 - **FR-010**: The numbered row MUST itself be sub-part 1 when its own answer cell holds the （1）
   marker, or when it holds no marker and the first sub-part row after it is marked （2）. When
-  the first sub-part row after it is marked （1）, the numbered row is not a slot.
+  the first sub-part row after it is marked （1）, the numbered row is not a slot; if that
+  numbered row's answer cell nevertheless holds text, the system MUST show a preview warning
+  naming the cell and its text (as in FR-014a), because the text belongs to no slot.
 - **FR-011**: A question with 2 or more sub-parts MUST be classified as a 題組 (one answer unit
   with one slot per sub-part); any other question MUST be a single question with exactly one slot
   at the numbered row's answer cell.

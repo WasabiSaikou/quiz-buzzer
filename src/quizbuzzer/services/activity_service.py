@@ -96,6 +96,18 @@ class ActivityNotFound(LookupError):
         super().__init__(f"Activity {activity_id} does not exist.")
 
 
+class ReimportRefused(Exception):
+    """Re-import is only allowed while the activity is DRAFT (FR-024, FR-026)."""
+
+    def __init__(self, activity_id: int, phase: Phase) -> None:
+        self.activity_id = activity_id
+        self.phase = phase
+        super().__init__(
+            f"Re-import is not possible: the activity is {phase.value}. Only a DRAFT activity's "
+            f"questions can be replaced; its questions were not changed."
+        )
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -201,6 +213,57 @@ class ActivityService:
             conn.close()
         if activity is None:
             raise ActivityNotFound(activity_id)
+        return activity
+
+    # --- US3: re-import into a DRAFT activity -------------------------------------------
+
+    def check_reimport_allowed(self, activity_id: int) -> Activity:
+        """The activity, if it exists and is DRAFT; otherwise ActivityNotFound / ReimportRefused."""
+        activity = self.get_activity(activity_id)
+        if activity.phase is not Phase.DRAFT:
+            raise ReimportRefused(activity_id, activity.phase)
+        return activity
+
+    def preview_reimport(self, activity_id: int, url: str, sheet_id: int) -> ImportPreview:
+        """Preview a replacement question set (diagrams/001-seq-reimport.puml)."""
+        self.check_reimport_allowed(activity_id)
+        return self.preview_import(url, sheet_id)
+
+    def replace_questions(
+        self,
+        activity_id: int,
+        url: str,
+        sheet_id: int,
+        fingerprint: str,
+        acknowledge_warnings: bool,
+    ) -> Activity:
+        """Replace the whole question set in one transaction; phase re-checked inside (FR-026)."""
+        preview = self.preview_import(url, sheet_id)
+        self._check_confirmable(preview, fingerprint, acknowledge_warnings)
+
+        now = _utc_now()
+        conn = db.connect(self.db_path)
+        try:
+            with db.transaction(conn):
+                phase = db.get_activity_phase(conn, activity_id)
+                if phase is None:
+                    raise ActivityNotFound(activity_id)
+                if phase is not Phase.DRAFT:
+                    raise ReimportRefused(activity_id, phase)
+                db.replace_activity_questions(
+                    conn,
+                    activity_id,
+                    spreadsheet_id=preview.spreadsheet_id,
+                    sheet_id=preview.sheet_id,
+                    tab_title=preview.tab_title,
+                    imported_at=now,
+                    units=preview.units,
+                )
+            activity = db.get_activity_with_units(conn, activity_id)
+        finally:
+            conn.close()
+        log.info("activity questions replaced: id=%s units=%s", activity_id, len(activity.units))
+        self._publish(activity)
         return activity
 
     # --- helpers ------------------------------------------------------------------------------

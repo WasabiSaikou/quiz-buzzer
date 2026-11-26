@@ -27,7 +27,7 @@ Index `one_current_activity`: partial unique index allowing at most one row with
 
 | Field | Column | Type | Rules |
 |---|---|---|---|
-| id | id | INTEGER PK | |
+| id | id | INTEGER PK | autoincrement: never reused after re-import deletes units |
 | activity_id *(FK; not drawn in diagram)* | activity_id | INTEGER NOT NULL | FK → activities.id ON DELETE CASCADE |
 | number | number | INTEGER NOT NULL | > 0; UNIQUE(activity_id, number) (duplicates are an import error) |
 | kind | kind | TEXT NOT NULL | CHECK in (`SINGLE`,`GROUP_SET`) |
@@ -38,7 +38,7 @@ Index `one_current_activity`: partial unique index allowing at most one row with
 
 | Field | Column | Type | Rules |
 |---|---|---|---|
-| id | id | INTEGER PK | |
+| id | id | INTEGER PK | autoincrement: never reused after re-import deletes slots |
 | unit_id *(FK; not drawn in diagram)* | unit_id | INTEGER NOT NULL | FK → question_units.id ON DELETE CASCADE |
 | subPart | sub_part | INTEGER NOT NULL | > 0; 1 for SINGLE; UNIQUE(unit_id, sub_part) |
 | cellRow | cell_row | INTEGER NOT NULL | 1-based; top-left of merge if merged |
@@ -78,7 +78,7 @@ fingerprint and returning it to the API.
 | `unrecognised_question_number` | warning | FR-008a (row + content) |
 | `sub_part_gap` | warning | missing k in 1..max |
 | `slot_cell_has_text` | warning | FR-011a (cell + text) |
-| `stray_answer_text` | warning | FR-014a (cell + text) |
+| `stray_answer_text` | warning | FR-014a (cell + text); also FR-010 when a numbered row followed by （1） has text in its answer cell |
 
 ## State transitions
 

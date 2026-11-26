@@ -321,3 +321,176 @@ def test_failed_create_publishes_nothing(fake_adapter, db_path, init_db):
     with pytest.raises(InvalidGroupCount):
         confirm(svc, group_count=1)
     assert hub.messages == []
+
+
+# --- US3: re-import into a DRAFT activity ---------------------------------------------------
+
+from quizbuzzer.services import activity_service as activity_service_module  # noqa: E402
+from quizbuzzer.services.activity_service import ReimportRefused  # noqa: E402
+
+REIMPORT = "https://docs.google.com/spreadsheets/d/reimport/edit"
+
+
+def numbered_grid(n):
+    return [["題號", "作答"]] + [[str(i), ""] for i in range(1, n + 1)]
+
+
+@pytest.fixture
+def reimport_sheet(fake_adapter):
+    fake_adapter.add_spreadsheet(
+        "reimport",
+        "Re-import Book",
+        [
+            {"sheetId": 0, "title": "Five", "index": 0, "grid": numbered_grid(5)},
+            {"sheetId": 5, "title": "Seven", "index": 1, "grid": numbered_grid(7)},
+        ],
+    )
+    return fake_adapter
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    times = iter(f"2026-11-26T08:00:0{i}Z" for i in range(10))
+    monkeypatch.setattr(activity_service_module, "_utc_now", lambda: next(times))
+
+
+@pytest.fixture
+def draft(svc, reimport_sheet, clock):
+    """A DRAFT activity holding 5 single questions from tab 'Five'."""
+    return confirm(svc, REIMPORT, 0, group_count=5)
+
+
+def replace(svc, activity_id, url=REIMPORT, sheet_id=5, ack=False, fingerprint=None):
+    if fingerprint is None:
+        fingerprint = svc.preview_reimport(activity_id, url, sheet_id).fingerprint
+    return svc.replace_questions(activity_id, url, sheet_id, fingerprint, ack)
+
+
+def ids(db_path, activity_id):
+    conn = db.connect(db_path)
+    try:
+        units = {r[0] for r in conn.execute(
+            "SELECT id FROM question_units WHERE activity_id = ?", (activity_id,))}
+        slots = {r[0] for r in conn.execute(
+            "SELECT s.id FROM answer_slots s JOIN question_units u ON s.unit_id = u.id "
+            "WHERE u.activity_id = ?", (activity_id,))}
+        return units, slots
+    finally:
+        conn.close()
+
+
+def test_reimport_replaces_the_whole_question_set(svc, db_path, draft):
+    old_units, old_slots = ids(db_path, draft.id)
+    assert len(draft.units) == 5
+
+    updated = replace(svc, draft.id)
+
+    assert [u.number for u in updated.units] == [1, 2, 3, 4, 5, 6, 7]
+    new_units, new_slots = ids(db_path, draft.id)
+    assert not (new_units & old_units) and not (new_slots & old_slots)
+    assert (updated.source_spreadsheet_id, updated.source_sheet_id, updated.source_tab_title) == (
+        "reimport",
+        5,
+        "Seven",
+    )
+    # FR-025: phase, group count, creation time and title are unchanged; imported_at moves.
+    assert updated.phase is Phase.DRAFT and updated.group_count == 5
+    assert updated.created_at == draft.created_at and updated.title == draft.title
+    assert updated.imported_at > draft.imported_at
+    assert svc.get_activity(draft.id) == updated
+
+
+def test_check_reimport_allowed_for_draft(svc, draft):
+    assert svc.check_reimport_allowed(draft.id).id == draft.id
+
+
+@pytest.mark.parametrize("phase", ["OPEN", "CLOSED"])
+def test_reimport_refused_when_not_draft(svc, db_path, draft, phase):
+    set_phase(db_path, draft.id, phase)
+    before = svc.get_activity(draft.id).units
+    fp = svc.preview_import(REIMPORT, 5).fingerprint
+    for call in (
+        lambda: svc.check_reimport_allowed(draft.id),
+        lambda: svc.preview_reimport(draft.id, REIMPORT, 5),
+        lambda: svc.replace_questions(draft.id, REIMPORT, 5, fp, False),
+    ):
+        with pytest.raises(ReimportRefused) as info:
+            call()
+        assert info.value.phase is Phase(phase)
+    assert svc.get_activity(draft.id).units == before
+
+
+def test_reimport_rechecks_phase_at_confirm(svc, db_path, draft):
+    p = svc.preview_reimport(draft.id, REIMPORT, 5)
+    set_phase(db_path, draft.id, "OPEN")  # opened after the preview was shown (US3 AS4)
+    with pytest.raises(ReimportRefused):
+        svc.replace_questions(draft.id, REIMPORT, 5, p.fingerprint, False)
+    assert len(svc.get_activity(draft.id).units) == 5
+
+
+def test_reimport_preview_changed(svc, reimport_sheet, draft):
+    p = svc.preview_reimport(draft.id, REIMPORT, 5)
+    reimport_sheet.replace_tab("reimport", 5, numbered_grid(8))
+    with pytest.raises(PreviewChanged):
+        svc.replace_questions(draft.id, REIMPORT, 5, p.fingerprint, False)
+    assert len(svc.get_activity(draft.id).units) == 5
+
+
+def test_reimport_import_errors(svc, reimport_sheet, draft):
+    reimport_sheet.replace_tab("reimport", 5, NO_HEADER_GRID)
+    with pytest.raises(ImportHasErrors):
+        replace(svc, draft.id)
+    assert len(svc.get_activity(draft.id).units) == 5
+
+
+def test_reimport_warnings_need_acknowledgement(svc, reimport_sheet, draft):
+    reimport_sheet.replace_tab("reimport", 5, WARNING_GRID)
+    with pytest.raises(WarningsNotAcknowledged):
+        replace(svc, draft.id, ack=False)
+    assert len(svc.get_activity(draft.id).units) == 5
+    assert [u.number for u in replace(svc, draft.id, ack=True).units] == [1, 2]
+
+
+def test_reimport_is_all_or_nothing(svc, db_path, draft, monkeypatch):
+    before = svc.get_activity(draft.id)
+    original = db.insert_units_and_slots
+
+    def fail_after_insert(*args, **kwargs):
+        original(*args, **kwargs)
+        raise RuntimeError("disk full")
+
+    p = svc.preview_reimport(draft.id, REIMPORT, 5)
+    monkeypatch.setattr(db, "insert_units_and_slots", fail_after_insert)
+    with pytest.raises(RuntimeError):
+        svc.replace_questions(draft.id, REIMPORT, 5, p.fingerprint, False)
+    assert svc.get_activity(draft.id) == before
+
+
+def test_reimport_unknown_activity(svc, reimport_sheet):
+    with pytest.raises(ActivityNotFound):
+        svc.preview_reimport(999, REIMPORT, 5)
+    fp = svc.preview_import(REIMPORT, 5).fingerprint
+    with pytest.raises(ActivityNotFound):
+        svc.replace_questions(999, REIMPORT, 5, fp, False)
+
+
+def test_reimport_publishes_activity_state(fake_adapter, db_path, init_db, reimport_sheet, clock):
+    hub = RecordingHub()
+    svc = ActivityService(fake_adapter, db_path, hub)
+    a = confirm(svc, REIMPORT, 0)
+    hub.messages.clear()
+    updated = replace(svc, a.id)
+    assert [m["activity"]["totals"] for m in hub.messages] == [{"units": 7, "slots": 7}]
+    assert hub.messages[0]["activity"]["importedAt"] == updated.imported_at
+
+
+def test_refused_reimport_publishes_nothing(fake_adapter, db_path, init_db, reimport_sheet, clock):
+    hub = RecordingHub()
+    svc = ActivityService(fake_adapter, db_path, hub)
+    a = confirm(svc, REIMPORT, 0)
+    hub.messages.clear()
+    set_phase(db_path, a.id, "CLOSED")
+    fp = svc.preview_import(REIMPORT, 5).fingerprint
+    with pytest.raises(ReimportRefused):
+        svc.replace_questions(a.id, REIMPORT, 5, fp, False)
+    assert hub.messages == []

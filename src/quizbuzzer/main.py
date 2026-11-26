@@ -29,6 +29,7 @@ from quizbuzzer.services.activity_service import (
     ImportHasErrors,
     InvalidGroupCount,
     PreviewChanged,
+    ReimportRefused,
     WarningsNotAcknowledged,
 )
 from quizbuzzer.services.sheets_adapter import (
@@ -167,6 +168,14 @@ def _register_activity_errors(app: FastAPI) -> None:
         },
     )
     register_error(app, ActivityNotFound, 404, "not_found", lambda e: str(e))
+    register_error(
+        app,
+        ReimportRefused,
+        409,
+        "reimport_refused",
+        lambda e: str(e),
+        lambda e: {"phase": e.phase.value},  # type: ignore[attr-defined]
+    )
 
 
 def create_app(

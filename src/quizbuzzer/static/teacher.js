@@ -8,6 +8,7 @@ const state = {
   sheetId: null,
   preview: null,
   current: null, // full Activity of the current (DRAFT/OPEN) activity, or null
+  mode: "create", // "create" a new activity, or "reimport" into state.current (US3)
 };
 
 // --- HTTP ------------------------------------------------------------------------------
@@ -96,8 +97,16 @@ async function loadTabs(url) {
 async function loadPreview(sheetId) {
   hideMessage($("import-message"));
   state.sheetId = Number(sheetId);
-  const preview = await api("POST", "/api/teacher/import/preview", { url: state.url, sheetId: state.sheetId });
-  renderPreview(preview);
+  const path =
+    state.mode === "reimport"
+      ? `/api/teacher/activities/${state.current.id}/reimport/preview`
+      : "/api/teacher/import/preview";
+  try {
+    renderPreview(await api("POST", path, { url: state.url, sheetId: state.sheetId }));
+  } catch (err) {
+    if (err.code === "reimport_refused") exitReimport(err.message);
+    throw err;
+  }
 }
 
 function renderPreview(p) {
@@ -142,16 +151,52 @@ function updateConfirmButton() {
   const p = state.preview;
   const hint = $("confirm-hint");
   let ok = Boolean(p);
+  const reimport = state.mode === "reimport" && state.current;
+  $("group-count-field").classList.toggle("hidden", Boolean(reimport));
+  $("confirm-button").textContent = reimport ? "Replace questions" : "Create DRAFT activity";
   if (p && !p.canConfirm) {
     ok = false;
     hint.textContent = "Fix the errors in the sheet, then refresh the preview.";
   } else if (p && p.totals.warnings > 0 && !$("ack-warnings").checked) {
     ok = false;
     hint.textContent = "Acknowledge the warnings to continue.";
+  } else if (p && reimport) {
+    const old = state.current.totals;
+    hint.textContent =
+      `This replaces all ${old.units} questions (${old.slots} slots) of "${state.current.title}" ` +
+      `with ${p.totals.units} questions (${p.totals.slots} slots). Phase and group count stay the same.`;
   } else {
     hint.textContent = "";
   }
   $("confirm-button").disabled = !ok;
+}
+
+async function confirmReplace() {
+  const p = state.preview;
+  hideMessage($("confirm-message"));
+  if (!window.confirm(`Replace the questions of "${state.current.title}"?`)) return;
+  $("confirm-button").disabled = true;
+  try {
+    const activity = await api("PUT", `/api/teacher/activities/${state.current.id}/questions`, {
+      url: state.url,
+      sheetId: p.sheetId,
+      fingerprint: p.fingerprint,
+      acknowledgeWarnings: $("ack-warnings").checked,
+    });
+    exitReimport();
+    showCurrent(activity);
+    showMessage($("current-message"), "Questions replaced.", "info");
+  } catch (err) {
+    if ((err.code === "preview_changed" || err.code === "import_errors") && err.details.preview) {
+      renderPreview(err.details.preview);
+    }
+    if (err.code === "reimport_refused" || err.code === "not_found") {
+      exitReimport(err.message);
+      return;
+    }
+    showApiError($("confirm-message"), err);
+    if (err.code !== "preview_changed" && err.code !== "import_errors") updateConfirmButton();
+  }
 }
 
 async function confirmCreate() {
@@ -186,10 +231,15 @@ async function confirmCreate() {
 function showCurrent(activity) {
   state.current = activity;
   const hasCurrent = Boolean(activity);
-  $("current-section").classList.toggle("hidden", !hasCurrent);
-  $("import-section").classList.toggle("hidden", hasCurrent);
-  if (hasCurrent) $("preview-section").classList.add("hidden");
+  if (state.mode === "reimport" && (!hasCurrent || activity.phase !== "DRAFT")) {
+    exitReimport(hasCurrent ? `Re-import cancelled: the activity is now ${activity.phase}.` : null);
+  }
+  const reimporting = state.mode === "reimport";
+  $("current-section").classList.toggle("hidden", !hasCurrent || reimporting);
+  $("import-section").classList.toggle("hidden", hasCurrent && !reimporting);
+  if (hasCurrent && !reimporting) $("preview-section").classList.add("hidden");
   if (!hasCurrent) return;
+  $("reimport-button").classList.toggle("hidden", activity.phase !== "DRAFT");
   $("current-title").textContent = activity.title;
   const phase = $("current-phase");
   phase.textContent = activity.phase;
@@ -197,6 +247,39 @@ function showCurrent(activity) {
   $("current-meta").textContent =
     `${activity.groupCount} groups · ${activity.totals.units} questions · ${activity.totals.slots} answer slots · imported ${activity.importedAt}`;
   $("current-units").replaceChildren(...unitRows(activity.units, activity.source.tabTitle));
+}
+
+function enterReimport() {
+  state.mode = "reimport";
+  state.preview = null;
+  hideMessage($("current-message"));
+  hideMessage($("import-message"));
+  $("import-heading").textContent = "Re-import questions";
+  $("reimport-note").textContent =
+    `Into "${state.current.title}" (DRAFT). Paste the same or another sheet link; nothing changes until you confirm.`;
+  $("reimport-note").classList.remove("hidden");
+  $("cancel-reimport").classList.remove("hidden");
+  $("tab-row").classList.add("hidden");
+  $("preview-section").classList.add("hidden");
+  $("current-section").classList.add("hidden");
+  $("import-section").classList.remove("hidden");
+}
+
+function exitReimport(message = null) {
+  const was = state.mode === "reimport";
+  state.mode = "create";
+  state.preview = null;
+  $("import-heading").textContent = "Import a Guided Notes worksheet";
+  $("reimport-note").classList.add("hidden");
+  $("cancel-reimport").classList.add("hidden");
+  $("tab-row").classList.add("hidden");
+  $("preview-section").classList.add("hidden");
+  hideMessage($("import-message"));
+  if (was && state.current) {
+    $("import-section").classList.add("hidden");
+    $("current-section").classList.remove("hidden");
+  }
+  if (message) showMessage($("current-message"), message);
 }
 
 async function onActivityState(summary) {
@@ -252,7 +335,11 @@ $("ack-warnings").addEventListener("change", updateConfirmButton);
 
 $("confirm-form").addEventListener("submit", (ev) => {
   ev.preventDefault();
-  confirmCreate();
+  if (state.mode === "reimport") confirmReplace();
+  else confirmCreate();
 });
+
+$("reimport-button").addEventListener("click", enterReimport);
+$("cancel-reimport").addEventListener("click", () => exitReimport());
 
 connectLive();

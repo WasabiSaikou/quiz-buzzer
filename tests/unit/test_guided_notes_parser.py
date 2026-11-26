@@ -144,6 +144,11 @@ EDGE_CASES = {
     "orphan_sub_part": ([(1, S, ["B3"])], [("error", "orphan_sub_part", ("B2",), (2,))]),
     "marker_forms": ([(1, G, ["B2", "B3", "B4", "B5"])], []),
     "numbered_row_then_marker_1": ([(1, G, ["B3", "B4"])], []),
+    # FR-010: the numbered row is not a slot, so its text belongs to no slot -> warning.
+    "numbered_row_text_then_marker_1": (
+        [(1, G, ["B3", "B4"])],
+        [("warning", "stray_answer_text", ("B2",), (2,))],
+    ),
     "single_empty_answer": ([(1, S, ["B2"])], []),
     "spacer_rows_in_group": ([(1, G, ["B2", "B5"])], []),
     "merged_answer_cell": ([(1, S, ["C2"]), (2, S, ["D3"])], []),

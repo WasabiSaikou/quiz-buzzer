@@ -51,7 +51,8 @@
   <header><h1>Quiz Buzzer（課堂搶答系統）· Teacher</h1></header>
   <main>
     <section id="import-section">
-      <h2>Import a Guided Notes worksheet</h2>
+      <h2 id="import-heading">Import a Guided Notes worksheet</h2>
+      <p id="reimport-note" class="muted hidden"></p>
       <div id="import-message" class="banner hidden" role="alert"></div>
       <form id="url-form" class="row">
         <div class="grow">
@@ -59,6 +60,7 @@
           <input id="sheet-url" type="url" required placeholder="https://docs.google.com/spreadsheets/d/…">
         </div>
         <button type="submit" class="primary">Load tabs</button>
+        <button type="button" id="cancel-reimport" class="hidden">Cancel re-import</button>
       </form>
       <div id="tab-row" class="row hidden" style="margin-top:12px">
         <div class="grow">
@@ -86,7 +88,7 @@
       <form id="confirm-form" class="confirm">
         <div id="confirm-message" class="banner hidden" role="alert"></div>
         <div class="row">
-          <div>
+          <div id="group-count-field">
             <label for="group-count">Groups (2–12)</label>
             <input id="group-count" type="number" min="2" max="12" step="1" value="4" required>
           </div>
@@ -107,6 +109,7 @@
         <span id="current-phase" class="tag"></span>
       </p>
       <p class="muted" id="current-meta"></p>
+      <p><button type="button" id="reimport-button" class="hidden">Re-import questions…</button></p>
       <table>
         <thead><tr><th>題號</th><th>Type</th><th>Sub-parts</th><th>Answer cells</th></tr></thead>
         <tbody id="current-units"></tbody>

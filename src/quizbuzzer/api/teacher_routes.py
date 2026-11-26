@@ -15,6 +15,7 @@ from quizbuzzer.api.schemas import (
     ImportTabsRequest,
     PreviewRequest,
     PreviewResponse,
+    ReplaceQuestionsRequest,
     TabsResponse,
 )
 from quizbuzzer.services.activity_service import ActivityService
@@ -57,3 +58,19 @@ def current_activity(request: Request) -> CurrentActivityResponse:
 @router.get("/activities/{activity_id}", response_model=ActivityResponse)
 def get_activity(activity_id: int, request: Request) -> ActivityResponse:
     return ActivityResponse.from_activity(_service(request).get_activity(activity_id))
+
+
+@router.post("/activities/{activity_id}/reimport/preview", response_model=PreviewResponse)
+def reimport_preview(activity_id: int, body: PreviewRequest, request: Request) -> PreviewResponse:
+    preview = _service(request).preview_reimport(activity_id, body.url, body.sheet_id)
+    return PreviewResponse.from_preview(preview)
+
+
+@router.put("/activities/{activity_id}/questions", response_model=ActivityResponse)
+def replace_questions(
+    activity_id: int, body: ReplaceQuestionsRequest, request: Request
+) -> ActivityResponse:
+    activity = _service(request).replace_questions(
+        activity_id, body.url, body.sheet_id, body.fingerprint, body.acknowledge_warnings
+    )
+    return ActivityResponse.from_activity(activity)

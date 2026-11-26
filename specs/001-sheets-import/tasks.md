@@ -264,22 +264,22 @@ cases in `tests/unit/test_activity_service.py`. Then do manual M8.
 
 ### Tests for User Story 3 (write first, observe failing) ⚠️
 
-- [ ] T039 [P] [US3] Add the re-import cases to `tests/unit/test_activity_service.py`:
+- [X] T039 [P] [US3] Add the re-import cases to `tests/unit/test_activity_service.py`:
   - **Success:** with 5 questions stored, re-importing a 7-question tab stores exactly those 7, with no old unit or slot ids left (US3 AS1). The source fields update to the new sheet and tab, `importedAt` updates, and `createdAt`, phase and `groupCount` are unchanged (FR-025, US3 AS2; `data-model.md › Activity.importedAt`, `› Activity.groupCount`).
   - **Phase refusals:** an OPEN or CLOSED activity (set via direct SQL as test setup) raises `ReimportRefused` from both `check_reimport_allowed`/`preview_reimport` and `replace_questions`, and the questions stay unchanged (US3 AS3, SC-006). An activity switched to OPEN between `preview_reimport` and `replace_questions` is refused at confirm time (FR-026, US3 AS4).
   - **Other refusals:** `PreviewChanged`, `ImportHasErrors` and `WarningsNotAcknowledged` apply exactly as in create.
   - **Atomicity:** an injected failure mid-replace leaves the old question set intact (FR-024).
-- [ ] T040 [P] [US3] Write `tests/integration/test_reimport_api.py`:
+- [X] T040 [P] [US3] Write `tests/integration/test_reimport_api.py`:
   - `POST /api/teacher/activities/{id}/reimport/preview` gives 200 with the preview shape, or 409 `reimport_refused` with `details.phase`;
   - `PUT /api/teacher/activities/{id}/questions` gives 200 with the updated `Activity`, or 409 `reimport_refused`, 409 `preview_changed`, 422 `import_errors`, 422 `warnings_not_acknowledged`, or 404 for an unknown id. An unknown id also gives 404 on `reimport/preview`;
   - a connected `/ws/teacher` socket receives `activity.state` after a successful replace.
 
 ### Implementation for User Story 3
 
-- [ ] T041 [US3] Add `replace_activity_questions(conn, activity_id, source fields, imported_at, units)` to `src/quizbuzzer/db.py`. It deletes the units (slots cascade), inserts the new units and slots, and updates the source fields and `imported_at` only, never phase or group count (`data-model.md › Activity.sourceSpreadsheetId`, `› Activity.sourceSheetId`, `› Activity.sourceTabTitle`, `› Activity.importedAt`). It does not run a transaction itself; the caller wraps it in one.
-- [ ] T042 [US3] Implement the exception `ReimportRefused` (carries the phase), then `check_reimport_allowed(activity_id)`, `preview_reimport(activity_id, url, sheet_id)` and `replace_questions(activity_id, url, sheet_id, fingerprint, acknowledge_warnings)` in `src/quizbuzzer/services/activity_service.py`, following `diagrams/001-seq-reimport.puml`. `replace_questions` re-checks the phase **inside** `db.transaction` before writing (FR-026), then publishes `activity.state` after commit. T039 must pass.
-- [ ] T043 [US3] Implement `POST /api/teacher/activities/{id}/reimport/preview` and `PUT /api/teacher/activities/{id}/questions` in `src/quizbuzzer/api/teacher_routes.py`. Map `ReimportRefused` → 409 `reimport_refused` with `details.phase` in `src/quizbuzzer/main.py`. T040 must pass.
-- [ ] T044 [US3] Extend `src/quizbuzzer/static/teacher.js` and `teacher.html`. On the current-activity panel, show a "Re-import" action only when the phase is DRAFT. It reuses the URL, tab and preview UI against the re-import endpoints, shows a replace-confirmation with the old and new totals, and displays `reimport_refused` with the phase.
+- [X] T041 [US3] Add `replace_activity_questions(conn, activity_id, source fields, imported_at, units)` to `src/quizbuzzer/db.py`. It deletes the units (slots cascade), inserts the new units and slots, and updates the source fields and `imported_at` only, never phase or group count (`data-model.md › Activity.sourceSpreadsheetId`, `› Activity.sourceSheetId`, `› Activity.sourceTabTitle`, `› Activity.importedAt`). It does not run a transaction itself; the caller wraps it in one.
+- [X] T042 [US3] Implement the exception `ReimportRefused` (carries the phase), then `check_reimport_allowed(activity_id)`, `preview_reimport(activity_id, url, sheet_id)` and `replace_questions(activity_id, url, sheet_id, fingerprint, acknowledge_warnings)` in `src/quizbuzzer/services/activity_service.py`, following `diagrams/001-seq-reimport.puml`. `replace_questions` re-checks the phase **inside** `db.transaction` before writing (FR-026), then publishes `activity.state` after commit. T039 must pass.
+- [X] T043 [US3] Implement `POST /api/teacher/activities/{id}/reimport/preview` and `PUT /api/teacher/activities/{id}/questions` in `src/quizbuzzer/api/teacher_routes.py`. Map `ReimportRefused` → 409 `reimport_refused` with `details.phase` in `src/quizbuzzer/main.py`. T040 must pass.
+- [X] T044 [US3] Extend `src/quizbuzzer/static/teacher.js` and `teacher.html`. On the current-activity panel, show a "Re-import" action only when the phase is DRAFT. It reuses the URL, tab and preview UI against the re-import endpoints, shows a replace-confirmation with the old and new totals, and displays `reimport_refused` with the phase.
 
 **Checkpoint**: All three stories are independently functional.
 

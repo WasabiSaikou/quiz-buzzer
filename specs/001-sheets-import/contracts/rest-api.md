@@ -20,7 +20,7 @@ passcode check as a router dependency, so this feature defines no auth of its ow
 |---|---|---|
 | 400 | `invalid_url` | URL is not a Google Sheets spreadsheet link (FR-002) |
 | 403 | `not_shared` | sheet not shared with service account; `details.serviceAccountEmail` (FR-004) |
-| 404 | `not_found` | spreadsheet / tab / activity does not exist |
+| 404 | `not_found` | spreadsheet or tab does not exist (`SheetNotFound`), or the activity does not exist (`ActivityNotFound`: `GET /activities/{id}`, re-import preview, `PUT …/questions`) |
 | 409 | `preview_changed` | sheet structure changed since preview; `details.preview` = new preview (FR-022) |
 | 409 | `current_activity_exists` | a DRAFT/OPEN activity exists; `details.activity` = {id, title, phase} (FR-020a) |
 | 409 | `reimport_refused` | activity is OPEN/CLOSED; `details.phase` (FR-026) |
@@ -29,7 +29,7 @@ passcode check as a router dependency, so this feature defines no auth of its ow
 | 422 | `warnings_not_acknowledged` | preview has warnings and `acknowledgeWarnings` is false |
 | 422 | `invalid_request` | body is missing fields or has the wrong types (FastAPI validation); `details.fields` |
 | 500 | `server_misconfigured` | `.env` / service-account key missing or invalid; the message names the env var, never secret contents |
-| 502 | `sheets_unavailable` | Google unreachable / timeout / unexpected API error |
+| 502 | `sheets_unavailable` | Google unreachable / timeout / unexpected API error, or the Google Sheets API is not enabled for the service account's project (Google HTTP 403 with reason `SERVICE_DISABLED`; reported as unavailable, not `not_shared`, because sharing would not fix it) |
 
 ---
 
@@ -132,12 +132,14 @@ OPEN activity.
 
 ## GET /api/teacher/activities/{id}
 
-Response 200: `Activity`. Returns 404 `not_found` if the activity does not exist.
+Response 200: `Activity`. Returns 404 `not_found` if the activity does not exist (service
+exception `ActivityNotFound`).
 
 ## POST /api/teacher/activities/{id}/reimport/preview
 
 Request is the same as `/import/preview`. Response 200 is the same preview shape. Returns 409
-`reimport_refused` if the activity is not DRAFT.
+`reimport_refused` if the activity is not DRAFT, and 404 `not_found` (`ActivityNotFound`) if it
+does not exist.
 
 ## PUT /api/teacher/activities/{id}/questions
 
@@ -153,7 +155,7 @@ Request:
 }
 ```
 
-Response 200: the updated `Activity` (phase and groupCount unchanged).
+Response 200: the updated `Activity` (phase and groupCount unchanged). Errors: 409 `reimport_refused` (phase re-checked at confirm time), 409 `preview_changed`, 422 `import_errors`, 422 `warnings_not_acknowledged`, 404 `not_found`.
 
 ---
 

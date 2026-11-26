@@ -32,8 +32,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_current_activity
     ON activities ((phase IN ('DRAFT', 'OPEN')))
     WHERE phase IN ('DRAFT', 'OPEN');
 
+-- AUTOINCREMENT on units and slots: ids are never reused after a re-import deletes rows, so an
+-- old unit/slot id can never be confused with a new one.
 CREATE TABLE IF NOT EXISTS question_units (
-    id          INTEGER PRIMARY KEY,
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
     activity_id INTEGER NOT NULL REFERENCES activities (id) ON DELETE CASCADE,
     number      INTEGER NOT NULL CHECK (number > 0),
     kind        TEXT    NOT NULL CHECK (kind IN ('SINGLE', 'GROUP_SET')),
@@ -44,7 +46,7 @@ CREATE TABLE IF NOT EXISTS question_units (
 );
 
 CREATE TABLE IF NOT EXISTS answer_slots (
-    id          INTEGER PRIMARY KEY,
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
     unit_id     INTEGER NOT NULL REFERENCES question_units (id) ON DELETE CASCADE,
     sub_part    INTEGER NOT NULL CHECK (sub_part > 0),
     cell_row    INTEGER NOT NULL CHECK (cell_row > 0),
@@ -113,6 +115,34 @@ def insert_units_and_slots(
             "VALUES (?, ?, ?, ?, ?)",
             [(unit_id, s.sub_part, s.row, s.column, s.a1_ref) for s in unit.slots],
         )
+
+
+def replace_activity_questions(
+    conn: sqlite3.Connection,
+    activity_id: int,
+    *,
+    spreadsheet_id: str,
+    sheet_id: int,
+    tab_title: str,
+    imported_at: str,
+    units: Sequence[ParsedUnit],
+) -> None:
+    """Replace an activity's whole question set (FR-024). Never touches phase or group count.
+
+    Runs inside the caller's transaction; does not begin or commit one itself.
+    """
+    conn.execute("DELETE FROM question_units WHERE activity_id = ?", (activity_id,))  # slots cascade
+    insert_units_and_slots(conn, activity_id, units)
+    conn.execute(
+        "UPDATE activities SET source_spreadsheet_id = ?, source_sheet_id = ?, "
+        "source_tab_title = ?, imported_at = ? WHERE id = ?",
+        (spreadsheet_id, sheet_id, tab_title, imported_at, activity_id),
+    )
+
+
+def get_activity_phase(conn: sqlite3.Connection, activity_id: int) -> Phase | None:
+    row = conn.execute("SELECT phase FROM activities WHERE id = ?", (activity_id,)).fetchone()
+    return Phase(row["phase"]) if row else None
 
 
 def find_current_activity(conn: sqlite3.Connection) -> sqlite3.Row | None:
