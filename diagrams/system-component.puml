@@ -24,7 +24,7 @@ node "Local server (single process: quizbuzzer.main)" {
   [Real-time channel\nrealtime/hub.py: RealtimeHub\n(teacher sockets; student sockets\nkeyed by StudentKey or None)] as RT
   [Activity service\nservices/activity_service.py:\nActivityService\n(import, open, end,\ncancel DRAFT, dashboard)] as ACT
   [Participation service\nservices/participation_service.py:\nParticipationService\n(join, leave, submit, group state)] as PART
-  [Visibility filter\nservices/visibility.py:\nstudent_view(phase, group, ...)] as VIS
+  [Visibility filter\nservices/visibility.py:\nstudent_view(activity, participant,\nmembers, own_submissions)] as VIS
   [Guided Notes parser\nservices/guided_notes_parser.py:\nparse(grid, merges)] as PARSER
   component "Sheets adapter" as SA {
     interface "SheetsAdapter" as SAI
@@ -62,7 +62,8 @@ ACT --> URL : parse_spreadsheet_url(url)
 ACT --> DB : atomic transactions\n(create, re-import, phase change,\ncancel = delete DRAFT)
 PART --> DB : atomic transactions\n(join, submit + rank)
 ACT --> RT : activity.state + dashboard.state\n(teacher sockets)
-PART --> RT : student.state snapshots;\ndashboard.state after join / leave / submit
+PART --> RT : student.state snapshots
+PART --> ACT : teacher_publisher = publish_dashboard\n(after join / leave / submit)
 ACT --> PART : publish_student_states()\nafter create / re-import /\nopen / end / cancel
 PART --> VIS : every student-bound\nresponse and push
 GSAD ..|> SAI

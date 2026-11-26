@@ -109,9 +109,12 @@ CLOSED activities and their submissions are never modified or deleted.
 
 ## Queries added to `db.py`
 
-`find_latest_activity` (R7), `get_phase_for_update` (reuses `get_activity_phase` inside the
-transaction), `delete_activity`, `set_phase`, `insert_participant`, `find_participant_by_token_hash`,
-`delete_participant`, `list_group_members`, `list_members_by_group`, `count_unit_submissions`,
-`group_has_submitted`, `insert_submission` (+ answers), `list_group_submissions`,
-`list_dashboard_submissions` (all units, rank order). Each one takes the caller's connection, so
-that it runs inside the caller's transaction.
+`find_latest_activity` (R7), `set_phase`, `delete_activity`, `get_group_count`,
+`insert_participant`, `find_participant_by_token_hash`, `get_participant`, `delete_participant`,
+`list_group_members`, `list_members_by_group`, `get_unit_for_activity`, `count_unit_submissions`,
+`get_group_submission` (the duplicate check; it also returns the group's own submission for
+`already_submitted`), `insert_submission` (+ answers), `list_group_submissions`,
+`list_dashboard_submissions` (all units, rank order). The phase is read inside transactions with
+001's `get_activity_phase`. Each function takes the caller's connection, so it runs inside the
+caller's transaction. (List updated to the implemented names on 2026-11-27: the planned
+`get_phase_for_update` and `group_has_submitted` were not needed as separate functions.)

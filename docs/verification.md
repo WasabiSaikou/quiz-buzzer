@@ -117,7 +117,8 @@ Each core-rule test was written first, run, and **observed failing** before its 
 | 4 · US2 join, change group, submit + ranking | `unit/test_participation_service.py`, `unit/test_ranking.py`, `integration/test_submit_concurrency.py` (100 rounds × 12 groups; same-group race ×50), `integration/test_student_api.py` | 17 failed, 3 collection errors (service exceptions missing) | 365 passed (full suite) | `83ecf66` |
 | 5 · US3 dashboard + end + displayed activity | `unit/test_activity_phases.py` (end, zero submissions, displayed activity, import after end), `integration/test_submit_concurrency.py` (submit vs end, 50 rounds), `integration/test_dashboard_api.py`, `integration/test_ws_teacher.py` (002 part) | 16 failed (first attempt hung on a blocking WebSocket receive; added a timed `recv` helper, then re-ran red) | 383 passed (full suite) | `7736c66` |
 | 7 · US5 cancel a DRAFT activity (run before US4, as instructed) | `unit/test_activity_phases.py` (cancel), `integration/test_phase_concurrency.py` (open vs cancel, join vs cancel), `integration/test_live_flow_api.py` (cancel) | 4 failed, 1 collection error (`CancelRefused` missing) | 396 passed (full suite) | `4ef7dc4` |
-| 6 · US4 teammates' live view + leak test | `unit/test_group_push.py`, `integration/test_visibility_leak.py` (SC-005), `integration/test_ws_student.py` (US4 part) | 7 failed; **3 reconnect-recovery tests passed on first run** (snapshot-on-connect from Phase 2 already covers FR-030), recorded as not red | 408 passed (full suite) | US4 commit |
+| 6 · US4 teammates' live view + leak test | `unit/test_group_push.py`, `integration/test_visibility_leak.py` (SC-005), `integration/test_ws_student.py` (US4 part) | 7 failed; **3 reconnect-recovery tests passed on first run** (snapshot-on-connect from Phase 2 already covers FR-030), recorded as not red | 408 passed (full suite) | `26daae0` |
+| 8 · Polish: log hygiene, push latency | `integration/test_logs_002.py`, `integration/test_push_latency.py` | **not red**: both passed on their first run (they verify existing behaviour; not Principle V core rules) | 410 passed | Polish commit |
 
 ## Manual verification (M11–M25)
 
@@ -149,3 +150,4 @@ secrets, no student data, Principle VI).
 
 | Date | Commit | Result | Notes |
 |---|---|---|---|
+| 2026-11-27 | `26daae0` + Polish | **410 passed**, 0 skipped, ~63 s | Includes SC-003 (100 rounds × 12 groups), submit vs end (50 rounds), the SC-005 leak test. Push latency at 60 student + 2 teacher sockets: OPEN 0.046–0.063 s, submission 0.015–0.031 s (3 runs; SC-001 / SC-002 target < 1 s) |

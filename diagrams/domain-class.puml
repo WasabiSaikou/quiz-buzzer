@@ -204,7 +204,18 @@ package "In memory (lost on server restart)" <<Rectangle>> {
     create(passcode) : str
     is_valid(token) : bool
   }
+  class StudentKey <<NamedTuple>> {
+    activityId : int
+    participantId : int
+    groupNumber : int
+  }
 }
+
+note bottom of StudentKey
+  Feature 002. Key of a /ws/student socket in
+  RealtimeHub, resolved once from the
+  qb_participant cookie at connect (or None).
+end note
 
 note bottom of TeacherSessions
   Feature 002. create() compares the passcode

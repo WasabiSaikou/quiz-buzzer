@@ -34,18 +34,18 @@ else current activity
   SUI --> Student : join form (group 1..groupCount, display name)
   Student -> SUI : choose group 3, name "小明"
   SUI -> API : POST /api/student/join\n{activityId, groupNumber, displayName}
-  API -> PART : join(activity_id, group_number, display_name)
-  PART -> PART : trim name; check 1..20 chars
+  API -> PART : join(token, activity_id, group_number, display_name)
+  PART -> PART : trim name; check 1..20 chars\n(else InvalidJoin(displayName) -> 422, no transaction)
   PART -> DB : BEGIN IMMEDIATE
-  PART -> DB : read activity phase, group_count
-  alt name invalid or group outside 1..groupCount
+  PART -> DB : current activity; group_count
+  alt no current activity, or activityId is not the current one
     PART -> DB : ROLLBACK
-    PART --> API : raise InvalidJoin(field, rule)
-    API --> SUI : 422 invalid_join
-  else activity CLOSED, or not the current activity
-    PART -> DB : ROLLBACK
-    PART --> API : raise JoinRefused(phase)
+    PART --> API : raise JoinRefused(phase of requested activity)
     API --> SUI : 409 join_refused
+  else group outside 1..groupCount
+    PART -> DB : ROLLBACK
+    PART --> API : raise InvalidJoin(groupNumber, groupCount)
+    API --> SUI : 422 invalid_join
   else cookie already holds a membership of this activity
     PART -> DB : ROLLBACK
     PART --> API : raise AlreadyJoined
@@ -54,12 +54,12 @@ else current activity
     PART -> PART : token = random secret
     PART -> DB : insert participant\n(activity, group_number, display_name,\njoined_at, sha256(token))
     PART -> DB : COMMIT
-    PART -> RT : publish dashboard.state (teacher sockets)
-    RT -->> TUI : dashboard.state (group members updated)
     PART -> VIS : student_view(activity, each member of group 3)
     VIS --> PART : own group's members (+ own submissions)
     PART -> RT : publish_group_state(activity, group 3)
     RT -->> SUI : student.state to group 3 sockets only\n(teammates see the new member)
+    PART -> RT : teacher_publisher(activity)\n= ActivityService.publish_dashboard
+    RT -->> TUI : dashboard.state (group members updated)
     API --> SUI : 201 student state +\nSet-Cookie qb_participant (HttpOnly)
     SUI -> API : reconnect WebSocket /ws/student (cookie)
     API -> RT : register socket with key\n(activity, participant, group 3)
@@ -77,7 +77,11 @@ SUI -> API : DELETE /api/student/membership (cookie)
 API -> PART : leave(token)
 PART -> DB : BEGIN IMMEDIATE
 PART -> DB : find participant by hash(token); read phase
-alt phase is OPEN or CLOSED
+alt no participant, or membership of another activity
+  PART -> DB : ROLLBACK
+  PART --> API : raise NotAMember
+  API --> SUI : 401 not_a_member
+else phase is OPEN or CLOSED
   PART -> DB : ROLLBACK
   PART --> API : raise GroupChangeRefused(phase)
   API --> SUI : 409 group_change_refused
@@ -85,7 +89,7 @@ alt phase is OPEN or CLOSED
 else phase is DRAFT
   PART -> DB : delete participant
   PART -> DB : COMMIT
-  PART -> RT : publish dashboard.state (teacher),\nstudent.state (old group's sockets)
+  PART -> RT : student.state (old group's sockets),\nthen dashboard.state via teacher_publisher
   API --> SUI : 204 + clear participant cookie
   SUI --> Student : join form
 end

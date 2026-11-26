@@ -63,6 +63,17 @@ The diagrams are the primary blueprint, and module and class names match them ex
 - `002-seq-reconnect`, `-teacher-unlock`: `resolve_key` then register then `student_state`, and
   the teacher side gets `get_displayed_activity()` (current, else latest CLOSED).
 
+**Diagram changes made during implementation** (re-rendered 2026-11-27, exit 0; details in
+`diagrams/VERIFICATION.md` › Feature 002):
+- E0: `system-component`: the teacher guard is `TeacherGuardMiddleware`, not a router
+  dependency (research R1).
+- E1, E2: `system-component`: `student_view` signature; dashboard pushes after join / leave /
+  submit go through `teacher_publisher` = `ActivityService.publish_dashboard`.
+- E3: `domain-class`: `StudentKey` added to the in-memory package.
+- E4–E6: `002-seq-open-activity`, `-join`, `-submit`: exact 409 messages; join check order and the
+  change-group `not_a_member` branch; submit's in-transaction `unit_not_found` and sub-part-set
+  branches; group push before the teacher dashboard.
+
 ## Technical Context
 
 **Language/Version**: Python 3.11 (uv-managed project `.venv`, as in 001 research R1).

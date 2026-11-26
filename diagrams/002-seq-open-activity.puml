@@ -32,7 +32,7 @@ alt activity does not exist
 else phase is not DRAFT (already OPEN, or CLOSED)
   ACT -> DB : ROLLBACK
   ACT --> API : raise PhaseConflict(current phase)
-  API --> TUI : 409 phase_conflict\n"activity is already <phase>"
+  API --> TUI : 409 phase_conflict + details.phase\n("The activity is already OPEN." /\n"... CLOSED; a closed activity cannot be opened again.")
 else phase is DRAFT
   ACT -> DB : UPDATE phase = OPEN
   ACT -> DB : COMMIT

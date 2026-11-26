@@ -18,7 +18,7 @@ participant "Teacher UI\n(every teacher tab)" as TUI
 Student -> SUI : fill every slot of unit N, submit
 SUI -> API : POST /api/student/submissions\n{unitId, answers: [{subPart, text}]}\n(participant cookie)
 API -> PART : submit(token, unit_id, answers)
-PART -> PART : trim each answer;\nevery slot present, non-empty, <= 200 chars?
+PART -> PART : validate_answers: trim each answer;\nnon-empty, <= 200 chars, no duplicate sub-part?
 alt validation fails
   PART --> API : raise InvalidAnswers(failing sub-parts)
   API --> SUI : 422 invalid_answers (names each sub-part)
@@ -40,8 +40,16 @@ else valid
       PART --> API : raise ActivityEnded
       API --> SUI : 409 activity_ended "The activity has ended"
     else phase OPEN
-      PART -> DB : this group already submitted unit N?
-      alt already submitted
+      PART -> DB : unit N of this activity, with its slots;\nthis group already submitted unit N?
+      alt unit not in the student's activity
+        PART -> DB : ROLLBACK
+        PART --> API : raise UnitNotFound
+        API --> SUI : 404 unit_not_found
+      else sub-part set differs from the unit's slots
+        PART -> DB : ROLLBACK
+        PART --> API : raise InvalidAnswers(missing / unknown)
+        API --> SUI : 422 invalid_answers
+      else already submitted
         PART -> DB : ROLLBACK
         PART -> VIS : own group's submission of unit N only
         PART --> API : raise AlreadySubmitted(own submission)
@@ -50,12 +58,12 @@ else valid
         PART -> DB : rank = 1 + COUNT(submissions of unit N)
         PART -> DB : insert submission\n(unit, group, participant, rank, received_at)\n+ one submission_answer per slot
         PART -> DB : COMMIT
-        PART -> RT : publish dashboard.state (teacher sockets:\nevery unit's submissions with rank, group,\nsubmitter, answers, receivedAt)
-        RT -->> TUI : dashboard shows the new row under unit N
         PART -> VIS : student_view(activity, each member of group)
         VIS --> PART : unit N submitted: answers,\nsubmitter name (NO rank)
         PART -> RT : publish_group_state(activity, group)\n-> student.state to this group's sockets only
         RT -->> MATES : unit N read-only, shows answer + submitter
+        PART -> RT : teacher_publisher(activity) = ActivityService.publish_dashboard\n(dashboard.state: every unit's submissions with rank,\ngroup, submitter, answers, receivedAt)
+        RT -->> TUI : dashboard shows the new row under unit N
         API --> SUI : 201 {unitId, answers, submittedBy}\n(no rank)
         SUI --> Student : unit N "submitted by your group"
       end

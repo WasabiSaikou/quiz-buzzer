@@ -435,17 +435,17 @@ activity gives 409.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T050 [P] Extend the log-hygiene test in `tests/integration/test_import_api.py`, or add `tests/integration/test_logs_002.py`. Run a full flow with sentinel display names, answers and passcode, and assert that none appears in captured logs at any level (FR-004, FR-032). Fix any log call that fails it.
-- [ ] T051 [P] Write `tests/integration/test_push_latency.py` (SC-001, SC-002). Connect 60 student sockets across 12 groups and 2 teacher sockets. Assert that every socket receives the OPEN snapshot within 1 s of `POST …/open` returning, and that the teacher sockets and the submitting group's sockets receive the post-submit snapshots within 1 s.
-- [ ] T052 [P] Rewrite `README.md`:
+- [X] T050 [P] Extend the log-hygiene test in `tests/integration/test_import_api.py`, or add `tests/integration/test_logs_002.py`. Run a full flow with sentinel display names, answers and passcode, and assert that none appears in captured logs at any level (FR-004, FR-032). Fix any log call that fails it.
+- [X] T051 [P] Write `tests/integration/test_push_latency.py` (SC-001, SC-002). Connect 60 student sockets across 12 groups and 2 teacher sockets. Assert that every socket receives the OPEN snapshot within 1 s of `POST …/open` returning, and that the teacher sockets and the submitting group's sockets receive the post-submit snapshots within 1 s.
+- [ ] T052 [P] **(Not done: skipped on instruction, 2026-11-27.)** Rewrite `README.md`:
   - project summary;
   - run instructions: `uv sync`, `.env` with `TEACHER_PASSCODE`, `QUIZBUZZER_HOST=0.0.0.0`, the `/teacher` and `/student` URLs, and the firewall note from `quickstart.md`;
   - test and diagram commands;
   - the dependency/licence table from 001 `research.md › R10` (unchanged list, plus the pointer to `uv.lock`), as required by Principle VII and noted in research R10.
-- [ ] T053 Run `uv run pytest` and record the result (count, duration, commit) in `docs/verification.md` › 002 › Automated test runs. Confirm every test-first row has its red entry and its green commit.
-- [ ] T054 Manual verification (human tester): run `quickstart.md` §5 M11–M25 with real devices on the classroom LAN, and record the date, tester, commit, results and evidence (no secrets, no student data) in `docs/verification.md` › 002 (Principle V). The AI does not mark this task done.
-- [ ] T055 Code-vs-diagram verification (Principle VIII). Compare `src/quizbuzzer/` with `diagrams/system-component.puml`, `domain-class.puml` and every `002-seq-*.puml` (names, calls, routes, status codes, message types), using the plan's Diagram Blueprint. Record a "Feature 002" section in `diagrams/VERIFICATION.md`, in the same table format as 001. Fix the diagrams (or the code, when the code breaks the spec), re-render with `java -jar tools/plantuml.jar "./diagrams/*.puml"` (exit 0, a PNG next to every `.puml`), and update `plan.md` › Diagram changes if anything changed.
-- [ ] T056 Final consistency pass (Principle VII). Check that `spec.md`, `plan.md`, `contracts/`, `data-model.md` and `quickstart.md` match the shipped behaviour, including 001's `contracts/rest-api.md` and `websocket.md` notes on the displayed activity. Mark `T001`–`T055` done in this file.
+- [X] T053 Run `uv run pytest` and record the result (count, duration, commit) in `docs/verification.md` › 002 › Automated test runs. Confirm every test-first row has its red entry and its green commit.
+- [ ] T054 **(Open: needs a human tester.)** Manual verification (human tester): run `quickstart.md` §5 M11–M25 with real devices on the classroom LAN, and record the date, tester, commit, results and evidence (no secrets, no student data) in `docs/verification.md` › 002 (Principle V). The AI does not mark this task done.
+- [X] T055 Code-vs-diagram verification (Principle VIII). Compare `src/quizbuzzer/` with `diagrams/system-component.puml`, `domain-class.puml` and every `002-seq-*.puml` (names, calls, routes, status codes, message types), using the plan's Diagram Blueprint. Record a "Feature 002" section in `diagrams/VERIFICATION.md`, in the same table format as 001. Fix the diagrams (or the code, when the code breaks the spec), re-render with `java -jar tools/plantuml.jar "./diagrams/*.puml"` (exit 0, a PNG next to every `.puml`), and update `plan.md` › Diagram changes if anything changed.
+- [X] T056 Final consistency pass (Principle VII). Check that `spec.md`, `plan.md`, `contracts/`, `data-model.md` and `quickstart.md` match the shipped behaviour, including 001's `contracts/rest-api.md` and `websocket.md` notes on the displayed activity. Mark `T001`–`T055` done in this file. (Done 2026-11-27 for every task except T052 (README, skipped on instruction) and T054 (manual checks, for a human).)
 
 ---
 
