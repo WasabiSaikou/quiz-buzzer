@@ -1,0 +1,73 @@
+@startuml 002-seq-reconnect
+title 002 Live Activity - Refresh / reconnect recovers state from the server
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Student
+participant "Student UI\n(student.js)" as SUI
+actor Teacher
+participant "Teacher UI\n(teacher.js)" as TUI
+participant "API server\n(ws_routes)" as API
+participant "Teacher guard" as AUTH
+participant "ParticipationService" as PART
+participant "ActivityService" as ACT
+database "SQLite store\n(db.py)" as DB
+participant "Visibility filter" as VIS
+participant "RealtimeHub" as RT
+
+== Student refreshes, or the socket drops ==
+SUI --> Student : "Reconnecting..." (if dropped)
+SUI -> SUI : retry with backoff until connected
+SUI -> API : WebSocket /ws/student\n(participant cookie, if any)
+API -> PART : resolve_key(token)\n-> StudentKey(activity, participant, group) or None
+API -> RT : register socket with that key\n(before reading state)
+note right of RT
+  Registered before the state read, so a
+  push made in between is not missed; the
+  client applies the newest state it holds.
+end note
+API -> PART : student_state(key)
+PART -> DB : participant by hash(token);\ncurrent (DRAFT / OPEN) activity
+alt valid member of group g of the current activity
+  PART -> VIS : student_view(activity, group g)
+  VIS --> PART : phase, units (if OPEN),\nown group's members + submissions;\nno other-group data, no rank
+  PART --> API : full student state
+else member of a CLOSED activity and no current activity
+  PART -> VIS : student_view(closed activity, group g)
+  VIS --> PART : phase CLOSED + own group's submissions
+  PART --> API : closed state (FR-025)
+else no valid membership, current activity exists
+  PART -> VIS : student_view(activity, membership = None)
+  VIS --> PART : {id, phase, groupCount}
+  PART --> API : state without membership -> join form\n(old memberships never carry over)
+else no valid membership, no current activity
+  PART --> API : {activity: null} -> "No activity available yet"
+end
+API -->> SUI : student.state
+SUI --> Student : screen for the current phase\n(waiting / answering / closed),\nno re-entry of name or group
+
+== Teacher refreshes, or the socket drops ==
+TUI -> API : WebSocket /ws/teacher (teacher session cookie)
+API -> AUTH : require_teacher(upgrade)
+alt session missing (e.g. server restarted)
+  AUTH --> API : raise TeacherRequired
+  API --> TUI : close 4401
+  TUI --> Teacher : passcode form (see 002-seq-teacher-unlock)
+else valid session
+  API -> RT : register socket (teacher set)
+  API -> ACT : get_displayed_activity()\n(current DRAFT / OPEN, else latest CLOSED),\nget_dashboard(id)
+  ACT -> DB : activity, units, groups + members,\nsubmissions ordered by rank
+  ACT --> API : state + dashboard
+  API -->> TUI : activity.state + dashboard.state
+  TUI --> Teacher : current phase and full live dashboard
+end
+
+note over DB
+  The database is the only source of truth
+  (Constitution IV): no client state is trusted
+  or needed to recover. Accepted submissions
+  survive a server restart.
+end note
+@enduml

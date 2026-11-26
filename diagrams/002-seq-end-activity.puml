@@ -1,0 +1,79 @@
+@startuml 002-seq-end-activity
+title 002 Live Activity - Teacher ends the activity
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Teacher
+participant "Teacher UI\n(teacher.js, any tab)" as TUI
+participant "API server\n(teacher_routes)" as API
+participant "Teacher guard" as AUTH
+participant "ActivityService" as ACT
+database "SQLite store\n(db.py)" as DB
+participant "ParticipationService" as PSVC
+participant "Visibility filter" as VIS
+participant "RealtimeHub" as RT
+participant "Student UI\n(every connected student)" as SUI
+participant "ParticipationService\n(a racing submit)" as PART
+
+Teacher -> TUI : click "End"
+TUI --> Teacher : confirm: "cannot be undone"
+Teacher -> TUI : confirm
+TUI -> API : POST /api/teacher/activities/{id}/end (cookie)
+API -> AUTH : require_teacher(request)
+AUTH --> API : ok (else 401 teacher_required)
+API -> ACT : end_activity(activity_id)
+ACT -> DB : BEGIN IMMEDIATE
+ACT -> DB : read phase of activity {id}
+alt activity does not exist
+  ACT -> DB : ROLLBACK
+  ACT --> API : raise ActivityNotFound
+  API --> TUI : 404 not_found
+else phase is not OPEN (DRAFT, or already CLOSED)
+  ACT -> DB : ROLLBACK
+  ACT --> API : raise PhaseConflict(current phase)
+  API --> TUI : 409 phase_conflict "activity is <phase>"\n(DRAFT: "use Cancel activity instead",\nsee 002-seq-cancel-activity)
+else phase is OPEN
+  ACT -> DB : UPDATE phase = CLOSED
+  ACT -> DB : COMMIT
+  ACT -> RT : publish activity.state + dashboard.state\n(teacher sockets)
+  RT -->> TUI : activity.state phase CLOSED (every tab)
+  ACT -> PSVC : publish_student_states()
+  loop every connected student socket
+    PSVC -> VIS : student_view(activity, own participant,\nown group's members + submissions)
+    VIS --> PSVC : phase CLOSED + own group's\nsubmissions only (no rank)
+  end
+  PSVC -> RT : send each socket its own snapshot
+  RT -->> SUI : student.state phase CLOSED
+  SUI --> SUI : -> closed screen with own\ngroup's submissions (FR-025)
+  ACT --> API : Activity (CLOSED)
+  API --> TUI : 200 activity
+  TUI --> Teacher : final dashboard (all ranks;\nzero submissions is fine)
+end
+
+== A submission racing the close ==
+PART -> DB : BEGIN IMMEDIATE (waits for the write lock)
+alt submit transaction got the lock first
+  PART -> DB : phase OPEN -> rank, insert, COMMIT
+  note right of PART
+    Accepted in full before the close:
+    on the final dashboard with its rank.
+  end note
+else end transaction got the lock first
+  PART -> DB : phase CLOSED -> ROLLBACK
+  note right of PART
+    409 activity_ended "The activity has ended";
+    nothing saved (FR-017).
+  end note
+end
+
+note right of DB
+  Ending and submitting serialise on the same
+  write lock, so no submission is ever saved
+  after the phase becomes CLOSED, and none is
+  half-saved. Forward only: CLOSED never reopens.
+  The CLOSED activity and its submissions are
+  kept for feature 003 (results / export).
+end note
+@enduml

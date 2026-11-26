@@ -1,0 +1,68 @@
+@startuml 002-seq-open-activity
+title 002 Live Activity - Teacher opens the DRAFT activity
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Teacher
+participant "Teacher UI\n(teacher.js, any tab)" as TUI
+participant "API server\n(teacher_routes)" as API
+participant "Teacher guard" as AUTH
+participant "ActivityService" as ACT
+database "SQLite store\n(db.py)" as DB
+participant "ParticipationService" as PSVC
+participant "Visibility filter" as VIS
+participant "RealtimeHub" as RT
+participant "Student UI\n(every connected student)" as SUI
+
+Teacher -> TUI : click "Open"
+TUI --> Teacher : confirm: "cannot be undone"
+Teacher -> TUI : confirm
+TUI -> API : POST /api/teacher/activities/{id}/open (cookie)
+API -> AUTH : require_teacher(request)
+AUTH --> API : ok (else 401 teacher_required)
+API -> ACT : open_activity(activity_id)
+ACT -> DB : BEGIN IMMEDIATE
+ACT -> DB : read phase of activity {id}
+alt activity does not exist
+  ACT -> DB : ROLLBACK
+  ACT --> API : raise ActivityNotFound
+  API --> TUI : 404 not_found
+else phase is not DRAFT (already OPEN, or CLOSED)
+  ACT -> DB : ROLLBACK
+  ACT --> API : raise PhaseConflict(current phase)
+  API --> TUI : 409 phase_conflict\n"activity is already <phase>"
+else phase is DRAFT
+  ACT -> DB : UPDATE phase = OPEN
+  ACT -> DB : COMMIT
+  ACT -> RT : publish activity.state + dashboard.state\n(teacher sockets)
+  RT -->> TUI : activity.state phase OPEN\n(every teacher tab)
+  ACT -> PSVC : publish_student_states()
+  loop every connected student socket (key = own group or none)
+    PSVC -> VIS : student_view(activity, own participant,\nown group's members + submissions)
+    VIS --> PSVC : phase OPEN + units (number, kind,\nsub-parts); no other-group data
+  end
+  PSVC -> RT : send each socket its own snapshot
+  RT -->> SUI : student.state phase OPEN
+  SUI --> SUI : waiting screen -> answering screen
+  ACT --> API : Activity (OPEN)
+  API --> TUI : 200 activity
+  TUI --> Teacher : dashboard (no submissions yet)
+end
+
+note right of DB
+  Read-check-update in one transaction
+  (FR-006): of two simultaneous "Open"
+  requests (two tabs) exactly one commits;
+  the other sees OPEN and gets 409.
+  Once OPEN, 001 re-import is refused
+  (001 FR-026).
+end note
+
+note over RT, SUI
+  Members of every group, joined or not,
+  receive the same phase message at once:
+  the race starts for everyone together.
+end note
+@enduml

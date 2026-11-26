@@ -1,0 +1,99 @@
+@startuml 002-seq-join
+title 002 Live Activity - Student joins a group (and changes group while DRAFT)
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Student
+participant "Student UI\n(student.js)" as SUI
+participant "API server\n(student_routes / ws_routes)" as API
+participant "ParticipationService" as PART
+database "SQLite store\n(db.py)" as DB
+participant "Visibility filter" as VIS
+participant "RealtimeHub" as RT
+participant "Teacher UI\n(every teacher tab)" as TUI
+
+Student -> SUI : open student page
+SUI -> API : GET /api/student/state (no participant cookie)
+API -> PART : student_state(key = None)
+PART -> DB : current (DRAFT / OPEN) activity?
+alt no current activity
+  PART --> API : no activity
+  API --> SUI : 200 {activity: null}
+  SUI --> Student : "No activity available yet"
+  note right of SUI
+    Stays connected to /ws/student; switches
+    to the join form when the teacher creates
+    an activity (FR-008, FR-031).
+  end note
+else current activity
+  PART -> VIS : student_view(activity, membership = None)
+  VIS --> PART : {id, phase, groupCount}
+  API --> SUI : 200 state
+  SUI --> Student : join form (group 1..groupCount, display name)
+  Student -> SUI : choose group 3, name "小明"
+  SUI -> API : POST /api/student/join\n{activityId, groupNumber, displayName}
+  API -> PART : join(activity_id, group_number, display_name)
+  PART -> PART : trim name; check 1..20 chars
+  PART -> DB : BEGIN IMMEDIATE
+  PART -> DB : read activity phase, group_count
+  alt name invalid or group outside 1..groupCount
+    PART -> DB : ROLLBACK
+    PART --> API : raise InvalidJoin(field, rule)
+    API --> SUI : 422 invalid_join
+  else activity CLOSED, or not the current activity
+    PART -> DB : ROLLBACK
+    PART --> API : raise JoinRefused(phase)
+    API --> SUI : 409 join_refused
+  else cookie already holds a membership of this activity
+    PART -> DB : ROLLBACK
+    PART --> API : raise AlreadyJoined
+    API --> SUI : 409 already_joined\n(UI offers "Change group" in DRAFT)
+  else DRAFT or OPEN
+    PART -> PART : token = random secret
+    PART -> DB : insert participant\n(activity, group_number, display_name,\njoined_at, sha256(token))
+    PART -> DB : COMMIT
+    PART -> RT : publish dashboard.state (teacher sockets)
+    RT -->> TUI : dashboard.state (group members updated)
+    PART -> VIS : student_view(activity, each member of group 3)
+    VIS --> PART : own group's members (+ own submissions)
+    PART -> RT : publish_group_state(activity, group 3)
+    RT -->> SUI : student.state to group 3 sockets only\n(teammates see the new member)
+    API --> SUI : 201 student state +\nSet-Cookie qb_participant (HttpOnly)
+    SUI -> API : reconnect WebSocket /ws/student (cookie)
+    API -> RT : register socket with key\n(activity, participant, group 3)
+    alt phase DRAFT
+      SUI --> Student : waiting screen "Group 3"
+    else phase OPEN
+      SUI --> Student : answering screen
+    end
+  end
+end
+
+== Change group (DRAFT only, FR-013) ==
+Student -> SUI : "Change group"
+SUI -> API : DELETE /api/student/membership (cookie)
+API -> PART : leave(token)
+PART -> DB : BEGIN IMMEDIATE
+PART -> DB : find participant by hash(token); read phase
+alt phase is OPEN or CLOSED
+  PART -> DB : ROLLBACK
+  PART --> API : raise GroupChangeRefused(phase)
+  API --> SUI : 409 group_change_refused
+  SUI --> Student : "Groups are fixed once the activity opens"
+else phase is DRAFT
+  PART -> DB : delete participant
+  PART -> DB : COMMIT
+  PART -> RT : publish dashboard.state (teacher),\nstudent.state (old group's sockets)
+  API --> SUI : 204 + clear participant cookie
+  SUI --> Student : join form
+end
+
+note over PART, DB
+  Group is taken from the stored participant,
+  never from a group number in later requests
+  (FR-014). Display names need not be unique
+  (FR-011) and are never logged (FR-032).
+end note
+@enduml

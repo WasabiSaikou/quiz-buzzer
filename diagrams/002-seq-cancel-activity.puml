@@ -1,0 +1,71 @@
+@startuml 002-seq-cancel-activity
+title 002 Live Activity - Teacher cancels the DRAFT activity
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Teacher
+participant "Teacher UI\n(teacher.js, any tab)" as TUI
+participant "API server\n(teacher_routes)" as API
+participant "Teacher guard" as AUTH
+participant "ActivityService" as ACT
+database "SQLite store\n(db.py)" as DB
+participant "ParticipationService" as PSVC
+participant "Visibility filter" as VIS
+participant "RealtimeHub" as RT
+participant "Student UI\n(every connected student)" as SUI
+
+Teacher -> TUI : click "Cancel activity"
+TUI --> Teacher : confirm: "deletes the activity, its\nquestions and groups; cannot be undone"
+alt teacher backs out
+  TUI --> Teacher : nothing changes
+else teacher confirms
+  TUI -> API : DELETE /api/teacher/activities/{id} (cookie)
+  API -> AUTH : require_teacher(request)
+  AUTH --> API : ok (else 401 teacher_required)
+  API -> ACT : cancel_activity(activity_id)
+  ACT -> DB : BEGIN IMMEDIATE
+  ACT -> DB : read phase of activity {id}
+  alt activity does not exist (e.g. cancelled from another tab)
+    ACT -> DB : ROLLBACK
+    ACT --> API : raise ActivityNotFound
+    API --> TUI : 404 not_found
+  else phase is OPEN
+    ACT -> DB : ROLLBACK
+    ACT --> API : raise CancelRefused(OPEN)
+    API --> TUI : 409 cancel_refused\n"an OPEN activity can only be ended"
+  else phase is CLOSED
+    ACT -> DB : ROLLBACK
+    ACT --> API : raise CancelRefused(CLOSED)
+    API --> TUI : 409 cancel_refused (CLOSED is kept)
+  else phase is DRAFT
+    ACT -> DB : DELETE activity {id}\n(question_units, answer_slots,\nparticipants cascade; no submissions exist)
+    ACT -> DB : COMMIT
+    ACT -> RT : publish activity.state (displayed activity:\nlatest CLOSED, or null) to teacher sockets
+    RT -->> TUI : activity.state (every tab); dashboard cleared
+    ACT -> PSVC : publish_student_states()
+    loop every connected student socket
+      PSVC -> VIS : student_view(no current activity;\nparticipant no longer exists)
+      VIS --> PSVC : {activity: null}
+    end
+    PSVC -> RT : send each socket its snapshot
+    RT -->> SUI : student.state {activity: null}
+    SUI --> SUI : -> "No activity available yet";\nstored membership now invalid
+    ACT --> API : ok
+    API --> TUI : 204
+    TUI --> Teacher : import form\n(001 confirm can now create a new one)
+  end
+end
+
+note right of DB
+  Phase check and delete are one transaction
+  (FR-008b). Against a simultaneous "Open",
+  exactly one commits: if Open wins, this sees
+  OPEN -> 409; if Cancel wins, Open finds no
+  activity -> 404. A racing join or 001 re-import
+  confirm likewise either commits first (and is
+  deleted here) or finds no activity.
+  Cancel is not a phase: nothing is kept.
+end note
+@enduml

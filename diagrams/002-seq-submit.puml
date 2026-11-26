@@ -1,0 +1,83 @@
+@startuml 002-seq-submit
+title 002 Live Activity - Submit a unit with server-side ranking
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Student
+participant "Student UI\n(student.js)" as SUI
+participant "API server\n(student_routes)" as API
+participant "ParticipationService" as PART
+database "SQLite store\n(db.py)" as DB
+participant "Visibility filter" as VIS
+participant "RealtimeHub" as RT
+participant "Teammates' UIs\n(same group only)" as MATES
+participant "Teacher UI\n(every teacher tab)" as TUI
+
+Student -> SUI : fill every slot of unit N, submit
+SUI -> API : POST /api/student/submissions\n{unitId, answers: [{subPart, text}]}\n(participant cookie)
+API -> PART : submit(token, unit_id, answers)
+PART -> PART : trim each answer;\nevery slot present, non-empty, <= 200 chars?
+alt validation fails
+  PART --> API : raise InvalidAnswers(failing sub-parts)
+  API --> SUI : 422 invalid_answers (names each sub-part)
+else valid
+  PART -> DB : BEGIN IMMEDIATE (serialises all writers)
+  PART -> DB : participant by hash(token) -> group, activity
+  alt unknown token or membership of another activity
+    PART -> DB : ROLLBACK
+    PART --> API : raise NotAMember
+    API --> SUI : 401 not_a_member -> join form
+  else member
+    PART -> DB : read activity phase
+    alt phase DRAFT
+      PART -> DB : ROLLBACK
+      PART --> API : raise NotOpen
+      API --> SUI : 409 not_open "The activity has not opened yet"
+    else phase CLOSED
+      PART -> DB : ROLLBACK
+      PART --> API : raise ActivityEnded
+      API --> SUI : 409 activity_ended "The activity has ended"
+    else phase OPEN
+      PART -> DB : this group already submitted unit N?
+      alt already submitted
+        PART -> DB : ROLLBACK
+        PART -> VIS : own group's submission of unit N only
+        PART --> API : raise AlreadySubmitted(own submission)
+        API --> SUI : 409 already_submitted\n"Your group has already submitted question N"\n+ own group's answer (no rank)
+      else first for this group
+        PART -> DB : rank = 1 + COUNT(submissions of unit N)
+        PART -> DB : insert submission\n(unit, group, participant, rank, received_at)\n+ one submission_answer per slot
+        PART -> DB : COMMIT
+        PART -> RT : publish dashboard.state (teacher sockets:\nevery unit's submissions with rank, group,\nsubmitter, answers, receivedAt)
+        RT -->> TUI : dashboard shows the new row under unit N
+        PART -> VIS : student_view(activity, each member of group)
+        VIS --> PART : unit N submitted: answers,\nsubmitter name (NO rank)
+        PART -> RT : publish_group_state(activity, group)\n-> student.state to this group's sockets only
+        RT -->> MATES : unit N read-only, shows answer + submitter
+        API --> SUI : 201 {unitId, answers, submittedBy}\n(no rank)
+        SUI --> Student : unit N "submitted by your group"
+      end
+    end
+  end
+end
+
+note right of DB
+  Constitution I / FR-019: phase check, duplicate
+  check, rank and insert are ONE transaction.
+  BEGIN IMMEDIATE takes the write lock, so two
+  groups submitting in the same millisecond are
+  ranked in server arrival order (1, then 2).
+  UNIQUE(unit_id, rank) and UNIQUE(unit_id, group_number)
+  back this up: a second winner or a second
+  submission by the same group cannot be stored.
+  Client time is never read.
+end note
+
+note over VIS, MATES
+  Constitution III / FR-023: other groups receive
+  nothing at all; the submitting group never
+  learns its rank or whether anyone was first.
+end note
+@enduml

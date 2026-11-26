@@ -1,5 +1,5 @@
 @startuml domain-class
-title Quiz Buzzer (課堂搶答系統) - Domain Classes (models.py)
+title Quiz Buzzer (課堂搶答系統) - Domain Classes (models.py; 001 + 002)
 
 skinparam shadowing false
 skinparam defaultFontName "Microsoft JhengHei"
@@ -44,32 +44,37 @@ class AnswerSlot {
   a1Ref : str
 }
 
-class Group {
-  id : int
+class Group <<value>> {
   number : int {1..groupCount}
-  name : str
 }
 
 class Participant {
   id : int
-  displayName : str
-  joinedAt : datetime
+  displayName : str {1..20 chars, trimmed}
+  joinedAt : str {ISO-8601 UTC}
+  tokenHash : str
 }
 
 class Submission {
   id : int
-  arrivalSeq : int
-  receivedAt : datetime
-  answers : Map<AnswerSlot, str>
-  isWinner : bool
+  rank : int {>=1}
+  receivedAt : str {ISO-8601 UTC, server}
+  isWinner() : bool {rank = 1}
+}
+
+class SubmissionAnswer {
+  text : str {1..200 chars, trimmed}
 }
 
 Activity "1" *-- "1..*" QuestionUnit : questions >
 QuestionUnit "1" *-- "1..*" AnswerSlot : slots >
 Activity "1" *-- "2..12" Group : groups >
 Group "1" *-- "0..*" Participant : members >
-QuestionUnit "1" o-- "0..*" Submission : submissions >
+QuestionUnit "1" *-- "0..*" Submission : submissions >
 Group "1" -- "0..*" Submission : submits >
+Participant "1" -- "0..*" Submission : submittedBy <
+Submission "1" *-- "1..*" SubmissionAnswer : answers >
+SubmissionAnswer "0..*" --> "1" AnswerSlot : for slot >
 Activity --> Phase
 QuestionUnit --> UnitKind
 
@@ -77,7 +82,13 @@ note right of Activity
   At most one Activity is non-CLOSED
   (DRAFT or OPEN) at a time.
   CLOSED activities are kept, with
-  results / CSV viewable.
+  results / CSV viewable (003).
+  Phase: DRAFT -> OPEN -> CLOSED, forward
+  only, one step at a time (002).
+  A DRAFT activity may be cancelled: it is
+  deleted with its units, slots, groups and
+  participants (no submissions can exist).
+  OPEN / CLOSED activities are never deleted.
   Slots live on the activity's source
   tab (sourceSheetId / sourceTabTitle).
 end note
@@ -93,12 +104,32 @@ note right of AnswerSlot
 end note
 
 note bottom of Submission
-  arrivalSeq and receivedAt are assigned by
-  the server inside one atomic transaction
-  (BEGIN IMMEDIATE, UNIQUE(group_id, unit_id));
-  at most one isWinner per QuestionUnit (I).
-  Group, Participant and Submission are
-  specified by later features.
+  Feature 002. Inside ONE transaction (BEGIN IMMEDIATE):
+  phase = OPEN check, duplicate check, rank =
+  1 + count(unit's submissions), insert (I).
+  UNIQUE(unit_id, group_number): one per group per unit.
+  UNIQUE(unit_id, rank): exactly one winner per unit.
+  Answers: one per slot of the unit, all non-empty.
+  Never sent to students of other groups before
+  CLOSED, rank never sent to students in 002 (III).
+end note
+
+note right of Participant
+  Feature 002. One student's membership in one
+  group of one activity (no accounts). The browser
+  keeps a random token (HttpOnly cookie); only its
+  hash is stored. The group is derived from the
+  token, never from the request (FR-014).
+  Leaving / changing group: DRAFT only (deleted).
+  Also deleted when its DRAFT activity is cancelled.
+  displayName is student data: never logged.
+end note
+
+note left of Group
+  Feature 002. A value, not a table: identified by
+  (activity, number), number in 1..groupCount.
+  participants and submissions store group_number.
+  May have no members.
 end note
 
 note left of QuestionUnit
@@ -166,4 +197,19 @@ ImportPreview *-- HeaderInfo
 ImportPreview *-- ParsedUnit
 ImportPreview *-- Issue
 ParsedUnit *-- ParsedSlot
+
+package "In memory (lost on server restart)" <<Rectangle>> {
+  class TeacherSessions {
+    tokens : set<str>
+    create(passcode) : str
+    is_valid(token) : bool
+  }
+}
+
+note bottom of TeacherSessions
+  Feature 002. create() compares the passcode
+  with TEACHER_PASSCODE (constant time) and
+  issues a random token (HttpOnly cookie).
+  The passcode itself is never stored or logged.
+end note
 @enduml

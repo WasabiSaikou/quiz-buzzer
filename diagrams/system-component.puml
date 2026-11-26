@@ -1,22 +1,30 @@
 @startuml system-component
-title Quiz Buzzer (課堂搶答系統) - System Components
+title Quiz Buzzer (課堂搶答系統) - System Components (001 import + 002 live activity)
 
 skinparam componentStyle uml2
 skinparam shadowing false
 skinparam defaultFontName "Microsoft JhengHei"
 
 actor Teacher
-actor "Student group" as Student
+actor "Student" as Student
 
 node "Browser" {
-  [Teacher UI\nstatic/teacher.html + teacher.js] as TUI
-  [Student UI\nstatic/student.html + student.js] as SUI
+  [Teacher UI\nstatic/teacher.html + teacher.js\n(passcode unlock, import,\nopen / end / cancel, live dashboard)] as TUI
+  [Student UI\nstatic/student.html + student.js\n(join, wait, answer,\nown-group view, closed)] as SUI
 }
 
 node "Local server (single process: quizbuzzer.main)" {
-  [API server\napi/teacher_routes.py\napi/ws_routes.py] as API
-  [Real-time channel\nrealtime/hub.py: RealtimeHub] as RT
-  [Activity service\nservices/activity_service.py:\nActivityService] as ACT
+  component "API server" as API {
+    [api/auth_routes.py\nPOST /api/teacher/session] as AR
+    [api/teacher_routes.py\n/api/teacher/*] as TR
+    [api/student_routes.py\n/api/student/*] as SR
+    [api/ws_routes.py\n/ws/teacher, /ws/student] as WSR
+    [Teacher guard\napi/auth.py: require_teacher\n(TeacherSessions)] as AUTH
+  }
+  [Real-time channel\nrealtime/hub.py: RealtimeHub\n(teacher sockets; student sockets\nkeyed by StudentKey or None)] as RT
+  [Activity service\nservices/activity_service.py:\nActivityService\n(import, open, end,\ncancel DRAFT, dashboard)] as ACT
+  [Participation service\nservices/participation_service.py:\nParticipationService\n(join, leave, submit, group state)] as PART
+  [Visibility filter\nservices/visibility.py:\nstudent_view(phase, group, ...)] as VIS
   [Guided Notes parser\nservices/guided_notes_parser.py:\nparse(grid, merges)] as PARSER
   component "Sheets adapter" as SA {
     interface "SheetsAdapter" as SAI
@@ -33,18 +41,31 @@ cloud "Google" {
 Teacher --> TUI
 Student --> SUI
 
-TUI --> API : HTTP /api/teacher/*
-SUI --> API : HTTP (join, submit;\nlater feature)
-RT ..> TUI : WebSocket push\n(activity state)
-RT ..> SUI : WebSocket push\n(phase / own group state;\nlater feature)
+TUI --> TR : HTTP /api/teacher/*\n(teacher session cookie)
+SUI --> SR : HTTP /api/student/*\n(participant cookie)
+TUI <..> WSR : WebSocket /ws/teacher
+SUI <..> WSR : WebSocket /ws/student
 
-API --> ACT : all commands and queries
+TUI --> AR : passcode (unlock)
+AR --> AUTH : TeacherSessions.create(passcode)
+TR --> AUTH : every route\n(router dependency)
+WSR --> AUTH : /ws/teacher upgrade
+TR --> ACT : teacher commands and queries
+SR --> PART : join, leave, submit, state
+WSR --> ACT : state on connect (teacher)
+WSR --> PART : state on connect (student)
+WSR --> RT : register socket\n(teacher, or student + StudentKey)
+
 ACT --> SAI : list_tabs(spreadsheet_id) /\nread_tab(spreadsheet_id, sheet_id)
 ACT --> PARSER : parse(grid, merges)
-ACT --> DB : atomic transactions
-ACT --> RT : publish activity state
-GSAD ..|> SAI
 ACT --> URL : parse_spreadsheet_url(url)
+ACT --> DB : atomic transactions\n(create, re-import, phase change,\ncancel = delete DRAFT)
+PART --> DB : atomic transactions\n(join, submit + rank)
+ACT --> RT : activity.state + dashboard.state\n(teacher sockets)
+PART --> RT : student.state snapshots;\ndashboard.state after join / leave / submit
+ACT --> PART : publish_student_states()\nafter create / re-import /\nopen / end / cancel
+PART --> VIS : every student-bound\nresponse and push
+GSAD ..|> SAI
 GSAD --> GSA : spreadsheets.get, values.get (import)\nvalues.batchUpdate RAW (export, 003)
 
 note right of PARSER
@@ -55,24 +76,40 @@ note right of PARSER
 end note
 
 note bottom of ACT
-  Sole authority for activity phase (IV),
-  arrival order and winner (I),
-  and visibility filtering (III).
+  Sole authority for activity phase (IV):
+  DRAFT -> OPEN -> CLOSED, forward only,
+  checked and changed in one transaction.
+  A DRAFT activity may instead be cancelled
+  (deleted); OPEN / CLOSED never are.
 end note
 
-note right of SUI
-  Student UI, student WebSocket and
-  submissions are specified by later
-  features. Tests replace
-  GoogleSheetsAdapter with
-  FakeSheetsAdapter (tests/fakes/).
+note bottom of PART
+  Sole authority for arrival order and
+  rank (I): phase check + duplicate check
+  + rank + insert in one BEGIN IMMEDIATE
+  transaction. Group comes only from the
+  participant cookie (FR-014).
 end note
 
-note left of API
-  Teacher actions (import, preview,
-  confirm, re-import, phase changes)
-  require feature 002's teacher
-  passcode check.
+note right of VIS
+  Constitution III: before CLOSED a student
+  gets only the phase, the unit list (when
+  OPEN) and its OWN group's members and
+  submissions - never other groups' data,
+  never rank. Pure function: it is never
+  handed other groups' rows. Every student
+  message is built by ParticipationService
+  through it (ActivityService delegates).
+end note
+
+note left of AUTH
+  Teacher passcode (TEACHER_PASSCODE in .env,
+  required at startup) -> random session token
+  in an HttpOnly cookie, kept in memory until
+  restart. Covers ALL teacher routes (002 open /
+  end / cancel / dashboard and 001 import /
+  preview / confirm / re-import) and the
+  /ws/teacher upgrade.
 end note
 
 note bottom of SA
@@ -85,7 +122,7 @@ end note
 note as SUPPORT
   Supporting modules (not drawn as components):
   main.py (create_app, error envelope),
-  config.py (Settings from .env),
+  config.py (Settings from .env, incl. TEACHER_PASSCODE),
   api/schemas.py (camelCase request/response models),
   models.py (domain + transient types; see domain-class).
 end note

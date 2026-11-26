@@ -1,0 +1,70 @@
+@startuml 002-seq-teacher-unlock
+title 002 Live Activity - Teacher unlock and teacher-only access check
+
+skinparam shadowing false
+skinparam defaultFontName "Microsoft JhengHei"
+autonumber
+
+actor Teacher
+participant "Teacher UI\n(teacher.js)" as TUI
+actor "Student\n(or crafted request)" as Student
+participant "API server\n(teacher_routes / ws_routes)" as API
+participant "Teacher guard\n(auth.py: require_teacher)" as AUTH
+participant "TeacherSessions\n(in memory)" as SES
+participant "ActivityService" as ACT
+
+== Unlock ==
+Teacher -> TUI : open teacher page
+TUI -> API : GET /api/teacher/activities/current\n(no session cookie)
+API -> AUTH : require_teacher(request)
+AUTH -> SES : is_valid(cookie)
+SES --> AUTH : false
+AUTH --> API : raise TeacherRequired
+API --> TUI : 401 teacher_required (no data)
+TUI --> Teacher : show passcode form
+Teacher -> TUI : enter passcode
+TUI -> API : POST /api/teacher/session {passcode}
+API -> SES : create(passcode)
+SES -> SES : constant-time compare\nwith TEACHER_PASSCODE
+alt wrong passcode
+  SES --> API : raise WrongPasscode
+  API --> TUI : 401 wrong_passcode
+  TUI --> Teacher : "wrong passcode", stay locked
+else correct
+  SES -> SES : token = random secret,\nadd to tokens
+  SES --> API : token
+  API --> TUI : 204 + Set-Cookie teacher_session\n(HttpOnly, SameSite=Strict)
+  TUI -> API : GET /api/teacher/activities/current (cookie)
+  API -> AUTH : require_teacher(request)
+  AUTH -> SES : is_valid(cookie)
+  SES --> AUTH : true
+  API -> ACT : get_displayed_activity()
+  ACT --> API : Activity | None
+  API --> TUI : 200 activity
+  TUI -> API : WebSocket /ws/teacher (cookie)
+  API -> AUTH : require_teacher(upgrade)
+  AUTH --> API : ok
+  API --> TUI : accept; activity.state + dashboard
+  TUI --> Teacher : teacher controls unlocked
+end
+
+== Student calls a teacher action directly ==
+Student -> API : any /api/teacher/* request\n(001 tabs / preview / create / view /\nreimport, 002 open / end / cancel / dashboard)
+API -> AUTH : require_teacher(request)
+AUTH -> SES : is_valid(cookie)
+SES --> AUTH : false
+AUTH --> API : raise TeacherRequired
+API --> Student : 401 teacher_required (no data)
+Student -> API : WebSocket /ws/teacher (no cookie)
+API -> AUTH : require_teacher(upgrade)
+AUTH --> API : raise TeacherRequired
+API --> Student : close 4401 before any message
+
+note over SES
+  Tokens live in memory: a server restart
+  locks every teacher page again (FR-003).
+  The passcode is never logged, stored,
+  or echoed (FR-004). The app refuses to
+  start if TEACHER_PASSCODE is unset.
+end note
+@enduml
