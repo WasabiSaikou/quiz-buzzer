@@ -1,0 +1,28 @@
+[project]
+name = "quizbuzzer"
+version = "0.1.0"
+description = "Quiz Buzzer (課堂搶答系統): classroom buzz-in activities built from Google Sheets Guided Notes"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "websockets",
+    "python-dotenv",
+    "google-api-python-client",
+    "google-auth",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "httpx",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.14"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]

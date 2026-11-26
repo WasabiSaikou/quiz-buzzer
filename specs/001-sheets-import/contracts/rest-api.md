@@ -27,6 +27,8 @@ passcode check as a router dependency, so this feature defines no auth of its ow
 | 422 | `invalid_group_count` | groupCount not in 2–12 (FR-019) |
 | 422 | `import_errors` | preview has errors; `details.preview` (FR-015) |
 | 422 | `warnings_not_acknowledged` | preview has warnings and `acknowledgeWarnings` is false |
+| 422 | `invalid_request` | body is missing fields or has the wrong types (FastAPI validation); `details.fields` |
+| 500 | `server_misconfigured` | `.env` / service-account key missing or invalid; the message names the env var, never secret contents |
 | 502 | `sheets_unavailable` | Google unreachable / timeout / unexpected API error |
 
 ---

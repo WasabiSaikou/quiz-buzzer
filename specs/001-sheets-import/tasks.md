@@ -42,17 +42,17 @@ preview pipeline (confirm re-parses the sheet). US3 (P2) needs US2's stored acti
 
 **Purpose**: Project initialization and tooling.
 
-- [ ] T001 Set up the Python interpreter per research R1. **Do not touch `..\.venv`** (no delete, no recreate, no `UV_PROJECT_ENVIRONMENT`).
+- [X] T001 Set up the Python interpreter per research R1. **Do not touch `..\.venv`** (no delete, no recreate, no `UV_PROJECT_ENVIRONMENT`).
   1. Run `uv python find 3.11`.
   2. If it finds nothing, or only MSYS2/mingw interpreters (`C:\msys64\…`, `..\.venv\bin\…`; on 2026-11-26 this machine has only those), run `uv python install 3.11`.
   3. Run `uv python pin 3.11` so that `.python-version` (committed) contains `3.11`.
   4. Verify that `uv python find` now resolves to a uv-managed CPython (under uv's python directory, not `msys64`).
 
   The project-local `.venv` is created by `uv sync` in T002, as described in quickstart.md §1.
-- [ ] T002 Create `pyproject.toml` (uv project `quizbuzzer`, `requires-python = ">=3.11"`, src layout with package `src/quizbuzzer`). Runtime deps: fastapi, uvicorn, websockets, python-dotenv, google-api-python-client, google-auth. Dev deps: pytest, httpx. Do **not** use `uvicorn[standard]` (research R10). Set pytest `testpaths = ["tests"]` and `pythonpath = ["src"]`. Run `uv lock` to produce `uv.lock`, then `uv sync` to create the project-local `.venv`. Confirm `uv run python -c "import sys; print(sys.version, sys.platform)"` reports 3.11 on `win32`, not mingw.
-- [ ] T003 [P] Create the package and test skeleton shown in plan.md › Project Structure: empty `__init__.py` in `src/quizbuzzer/`, `src/quizbuzzer/services/`, `src/quizbuzzer/realtime/` and `src/quizbuzzer/api/`, plus the dirs `src/quizbuzzer/static/`, `tests/fakes/`, `tests/fixtures/sheets/edge_cases/`, `tests/unit/` and `tests/integration/`.
-- [ ] T004 [P] Create `.env.example` with placeholder values only for `GOOGLE_APPLICATION_CREDENTIALS`, `QUIZBUZZER_DB_PATH` (default `data/quizbuzzer.db`), `QUIZBUZZER_HOST` (default `127.0.0.1`) and `QUIZBUZZER_PORT` (default `8000`), as listed in plan.md › Implementation Notes.
-- [ ] T005 [P] Extend `.gitignore` with `data/`, `*.db-wal`, `*.db-shm` (SQLite WAL side files are not matched by `*.db`), `.venv/` and `*.egg-info/`. Keep the existing entries.
+- [X] T002 Create `pyproject.toml` (uv project `quizbuzzer`, `requires-python = ">=3.11"`, src layout with package `src/quizbuzzer`). Runtime deps: fastapi, uvicorn, websockets, python-dotenv, google-api-python-client, google-auth. Dev deps: pytest, httpx. Do **not** use `uvicorn[standard]` (research R10). Set pytest `testpaths = ["tests"]` and `pythonpath = ["src"]`. Run `uv lock` to produce `uv.lock`, then `uv sync` to create the project-local `.venv`. Confirm `uv run python -c "import sys; print(sys.version, sys.platform)"` reports 3.11 on `win32`, not mingw.
+- [X] T003 [P] Create the package and test skeleton shown in plan.md › Project Structure: empty `__init__.py` in `src/quizbuzzer/`, `src/quizbuzzer/services/`, `src/quizbuzzer/realtime/` and `src/quizbuzzer/api/`, plus the dirs `src/quizbuzzer/static/`, `tests/fakes/`, `tests/fixtures/sheets/edge_cases/`, `tests/unit/` and `tests/integration/`.
+- [X] T004 [P] Create `.env.example` with placeholder values only for `GOOGLE_APPLICATION_CREDENTIALS`, `QUIZBUZZER_DB_PATH` (default `data/quizbuzzer.db`), `QUIZBUZZER_HOST` (default `127.0.0.1`) and `QUIZBUZZER_PORT` (default `8000`), as listed in plan.md › Implementation Notes.
+- [X] T005 [P] Extend `.gitignore` with `data/`, `*.db-wal`, `*.db-shm` (SQLite WAL side files are not matched by `*.db`), `.venv/` and `*.egg-info/`. Keep the existing entries.
 
 ---
 
@@ -63,38 +63,38 @@ and the test harness. Every story depends on these.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T006 [P] Implement `src/quizbuzzer/models.py`:
+- [X] T006 [P] Implement `src/quizbuzzer/models.py`:
   - enums `Phase` (values per `data-model.md › Activity.phase`) and `UnitKind` (values per `data-model.md › QuestionUnit.kind`);
   - dataclasses `Activity`, `QuestionUnit` and `AnswerSlot`, with the fields of `data-model.md › Activity`, `› QuestionUnit` and `› AnswerSlot` in snake_case;
   - the transient dataclasses `SpreadsheetInfo`, `TabInfo`, `TabData`, `HeaderInfo`, `ParsedSlot`, `ParsedUnit`, `Issue` and `ImportPreview`, per `data-model.md › Transient types`. Field rules come from `data-model.md › Issue.severity`, `› SpreadsheetInfo.requested_gid` (nullable), `› TabData.grid`, `› TabData.merges`, `› ImportPreview.header` (nullable) and `› ImportPreview.can_confirm`.
 
   No I/O in this module.
-- [ ] T007 [P] Implement `src/quizbuzzer/config.py`: load `.env` with python-dotenv into a frozen `Settings` (`credentials_path`, `db_path`, `host`, `port`, with the defaults from T004). Read `service_account_email` from the key file's `client_email` (research R5). If the key file is missing, raise a clear error that names the env var, never the file contents.
-- [ ] T008 Implement `src/quizbuzzer/db.py` `connect(db_path)` and `init_schema(conn)`. Connection settings per research R7: `isolation_level=None`, `PRAGMA foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000`; create the parent directory if missing. Schema is idempotent `CREATE … IF NOT EXISTS`:
+- [X] T007 [P] Implement `src/quizbuzzer/config.py`: load `.env` with python-dotenv into a frozen `Settings` (`credentials_path`, `db_path`, `host`, `port`, with the defaults from T004). Read `service_account_email` from the key file's `client_email` (research R5). If the key file is missing, raise a clear error that names the env var, never the file contents.
+- [X] T008 Implement `src/quizbuzzer/db.py` `connect(db_path)` and `init_schema(conn)`. Connection settings per research R7: `isolation_level=None`, `PRAGMA foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000`; create the parent directory if missing. Schema is idempotent `CREATE … IF NOT EXISTS`:
   - table `activities` with the columns and CHECKs of `data-model.md › Activity.id`, `› Activity.phase`, `› Activity.groupCount`, `› Activity.title`, `› Activity.sourceSpreadsheetId`, `› Activity.sourceSheetId`, `› Activity.sourceTabTitle`, `› Activity.createdAt` and `› Activity.importedAt`;
   - the partial unique index `one_current_activity` (`data-model.md › Activity`; exact DDL in research R7);
   - table `question_units` per `data-model.md › QuestionUnit.id`, `› QuestionUnit.activity_id`, `› QuestionUnit.number`, `› QuestionUnit.kind`, `› QuestionUnit.sourceRow` and `› QuestionUnit.position` (FK with cascade, both UNIQUE constraints);
   - table `answer_slots` per `data-model.md › AnswerSlot.id`, `› AnswerSlot.unit_id`, `› AnswerSlot.subPart`, `› AnswerSlot.cellRow`, `› AnswerSlot.cellColumn` and `› AnswerSlot.a1Ref` (FK with cascade, UNIQUE(unit_id, sub_part)).
 
   Do **not** create the groups/participants/submissions tables (`data-model.md › Later-feature tables`). Add a `transaction(conn)` context manager that runs `BEGIN IMMEDIATE` … `COMMIT`, with `ROLLBACK` on exception.
-- [ ] T009 [P] Implement `src/quizbuzzer/services/sheets_adapter.py`:
+- [X] T009 [P] Implement `src/quizbuzzer/services/sheets_adapter.py`:
   - a `SheetsAdapter` `Protocol` with `list_tabs(spreadsheet_id) -> SpreadsheetInfo`, `read_tab(spreadsheet_id, sheet_id) -> TabData` and the property `service_account_email`;
   - the exceptions `InvalidSheetUrl`, `SheetNotShared` (carries `service_account_email`), `SheetNotFound` and `SheetsUnavailable`.
-- [ ] T010 [P] Write `tests/unit/test_sheets_url.py` (must fail first). Cover:
+- [X] T010 [P] Write `tests/unit/test_sheets_url.py` (must fail first). Cover:
   - an `/edit` URL, an `/edit#gid=918273645` URL, and URLs with `?gid=` / `&gid=` (per research R5);
   - a bare `/d/<id>` URL and surrounding whitespace;
   - rejecting `https://example.com/x`, a Docs (not Sheets) link, a missing id and an empty string.
 
   Expected: `(spreadsheet_id, gid | None)`, or `InvalidSheetUrl` (FR-002).
-- [ ] T011 Implement `src/quizbuzzer/services/sheets_url.py` `parse_spreadsheet_url(url) -> tuple[str, int | None]` so that T010 passes. Pure; no network.
-- [ ] T012 [P] Implement `tests/fakes/fake_sheets_adapter.py` `FakeSheetsAdapter(SheetsAdapter)`. It loads both fixture formats from research R9:
+- [X] T011 Implement `src/quizbuzzer/services/sheets_url.py` `parse_spreadsheet_url(url) -> tuple[str, int | None]` so that T010 passes. Pure; no network.
+- [X] T012 [P] Implement `tests/fakes/fake_sheets_adapter.py` `FakeSheetsAdapter(SheetsAdapter)`. It loads both fixture formats from research R9:
   - `*.json` in the shape `{spreadsheetId, title, tabs:[{sheetId, title, index, grid, merges}]}`;
   - `*.csv` as a single-tab spreadsheet (`spreadsheetId` = `title` = file stem, tab `sheetId` 0 / `"Sheet1"` / index 0, `merges` = []), read with `encoding="utf-8-sig"` and `csv.reader`.
 
   An unknown `spreadsheet_id` raises `SheetNotFound`, and so does an unknown `sheet_id` in `read_tab` (research R5). It returns `TabData` with `spreadsheet_title` and the tab `title` filled (`data-model.md › TabData.merges`). It supports `fail_with(exc)` to raise `SheetNotShared`, `SheetNotFound` or `SheetsUnavailable`, and `replace_tab(spreadsheet_id, sheet_id, grid, merges)` so tests can mutate a sheet between preview and confirm. Every method must be read-only toward the stored fixtures: a test asserts the fixture grids are byte-identical after any call (FR-005).
-- [ ] T013 Implement `src/quizbuzzer/api/schemas.py` (pydantic, camelCase aliases via `alias_generator`). Define the request models `ImportTabsRequest`, `PreviewRequest`, `CreateActivityRequest` and `ReplaceQuestionsRequest`; the response models `TabsResponse`, `PreviewResponse`, `ActivityResponse` and `CurrentActivityResponse`; and the `ErrorEnvelope`. All exactly as in `contracts/rest-api.md`. `groupCount` is validated in the service, not in pydantic, so the 422 code is `invalid_group_count` (`data-model.md › Activity.groupCount`).
-- [ ] T014 Implement `src/quizbuzzer/main.py` `create_app(adapter=None, db_path=None)`. It builds `Settings`, runs `init_schema` at startup, sets `app.state.hub = None` (the real `RealtimeHub` is wired in T037), mounts `static/` and serves `GET /teacher` → `static/teacher.html`. It registers exception handlers that map the adapter and service exceptions to the error envelope and status codes in `contracts/rest-api.md › Error envelope`; `SheetNotShared` includes `details.serviceAccountEmail` (FR-004). Module-level `app = create_app()` builds a `GoogleSheetsAdapter` lazily, only when no adapter is injected.
-- [ ] T015 Implement `tests/conftest.py` fixtures:
+- [X] T013 Implement `src/quizbuzzer/api/schemas.py` (pydantic, camelCase aliases via `alias_generator`). Define the request models `ImportTabsRequest`, `PreviewRequest`, `CreateActivityRequest` and `ReplaceQuestionsRequest`; the response models `TabsResponse`, `PreviewResponse`, `ActivityResponse` and `CurrentActivityResponse`; and the `ErrorEnvelope`. All exactly as in `contracts/rest-api.md`. `groupCount` is validated in the service, not in pydantic, so the 422 code is `invalid_group_count` (`data-model.md › Activity.groupCount`).
+- [X] T014 Implement `src/quizbuzzer/main.py` `create_app(adapter=None, db_path=None)`. It builds `Settings`, runs `init_schema` at startup, sets `app.state.hub = None` (the real `RealtimeHub` is wired in T037), mounts `static/` and serves `GET /teacher` → `static/teacher.html`. It registers exception handlers that map the adapter and service exceptions to the error envelope and status codes in `contracts/rest-api.md › Error envelope`; `SheetNotShared` includes `details.serviceAccountEmail` (FR-004). Module-level `app = create_app()` builds a `GoogleSheetsAdapter` lazily, only when no adapter is injected.
+- [X] T015 Implement `tests/conftest.py` fixtures:
   - `fake_adapter` (a `FakeSheetsAdapter` loaded from `tests/fixtures/sheets/`);
   - `db_path` (a file under `tmp_path`, so concurrency tests can open several connections);
   - `app` / `client` (`create_app(adapter=fake_adapter, db_path=db_path)` + `TestClient`);
