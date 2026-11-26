@@ -249,6 +249,14 @@ def set_phase(conn: sqlite3.Connection, activity_id: int, phase: Phase) -> None:
     conn.execute("UPDATE activities SET phase = ? WHERE id = ?", (phase.value, activity_id))
 
 
+def delete_activity(conn: sqlite3.Connection, activity_id: int) -> None:
+    """Cancel a DRAFT activity (002 FR-008a): units, slots and participants cascade.
+
+    The caller checks phase = DRAFT inside its transaction; CLOSED rows are never deleted.
+    """
+    conn.execute("DELETE FROM activities WHERE id = ?", (activity_id,))
+
+
 def find_latest_activity(conn: sqlite3.Connection) -> sqlite3.Row | None:
     """The most recently CLOSED activity (002 research R7).
 

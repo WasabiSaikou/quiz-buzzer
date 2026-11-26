@@ -39,6 +39,7 @@ from quizbuzzer.services.participation_service import (
 from quizbuzzer.services.activity_service import (
     ActivityNotFound,
     ActivityService,
+    CancelRefused,
     CurrentActivityExists,
     ImportHasErrors,
     InvalidGroupCount,
@@ -200,6 +201,14 @@ def _register_phase_errors(app: FastAPI) -> None:
         PhaseConflict,
         409,
         "phase_conflict",
+        lambda e: str(e),
+        lambda e: {"phase": e.phase.value},  # type: ignore[attr-defined]
+    )
+    register_error(
+        app,
+        CancelRefused,
+        409,
+        "cancel_refused",
         lambda e: str(e),
         lambda e: {"phase": e.phase.value},  # type: ignore[attr-defined]
     )

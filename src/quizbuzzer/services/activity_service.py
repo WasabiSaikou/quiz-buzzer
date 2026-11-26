@@ -125,6 +125,19 @@ class PhaseConflict(Exception):
         super().__init__(message)
 
 
+class CancelRefused(Exception):
+    """Only a DRAFT activity can be cancelled (FR-008b)."""
+
+    def __init__(self, activity_id: int, phase: Phase) -> None:
+        self.activity_id = activity_id
+        self.phase = phase
+        if phase is Phase.OPEN:
+            message = "An OPEN activity can only be ended."
+        else:
+            message = "A CLOSED activity is kept and cannot be cancelled."
+        super().__init__(message)
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -301,6 +314,30 @@ class ActivityService:
     def end_activity(self, activity_id: int) -> Activity:
         """OPEN -> CLOSED in one transaction; serialises with every submit (FR-017)."""
         return self._transition(activity_id, "end", Phase.OPEN, Phase.CLOSED)
+
+    def cancel_activity(self, activity_id: int) -> None:
+        """Delete a DRAFT activity (FR-008a - FR-008c; diagrams/002-seq-cancel-activity.puml).
+
+        The phase check and the delete are one transaction, so against a simultaneous Open
+        exactly one wins. Cancel is not a phase: nothing of the activity is kept.
+        """
+        conn = db.connect(self.db_path)
+        try:
+            with db.transaction(conn):
+                phase = db.get_activity_phase(conn, activity_id)
+                if phase is None:
+                    raise ActivityNotFound(activity_id)
+                if phase is not Phase.DRAFT:
+                    raise CancelRefused(activity_id, phase)
+                db.delete_activity(conn, activity_id)
+        finally:
+            conn.close()
+        log.info("activity cancelled: id=%s", activity_id)
+        # After the commit: teachers see the displayed activity (latest CLOSED, or none) and no
+        # dashboard; every student socket gets its new snapshot (FR-008, FR-008c).
+        if self.hub is not None:
+            self.hub.publish_from_thread(activity_state_message(self.get_displayed_activity()))
+        self._publish_students()
 
     def get_displayed_activity(self) -> Activity | None:
         """The teacher's view (research R7): DRAFT/OPEN, else the latest CLOSED, else None.

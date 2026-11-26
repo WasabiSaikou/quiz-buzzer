@@ -411,23 +411,23 @@ activity gives 409.
 
 ### Tests for User Story 5 (write first, observe failing) ⚠️
 
-- [ ] T045 [P] [US5] Extend `tests/unit/test_activity_phases.py` with the cancel part:
+- [X] T045 [P] [US5] Extend `tests/unit/test_activity_phases.py` with the cancel part:
   - `cancel_activity` on DRAFT deletes the activity, its units, slots and participants (row counts 0 for that id);
   - on OPEN it raises `CancelRefused(OPEN)` with "can only be ended"; on CLOSED, `CancelRefused(CLOSED)` (rows unchanged); on a missing id, `ActivityNotFound`;
   - success publishes `activity.state` for the displayed activity (the latest CLOSED one, or `None`) and calls `student_publisher`, and a refusal publishes nothing;
   - after a cancel, `create_from_import` succeeds;
   - `replace_questions` on the cancelled id raises `ActivityNotFound`;
   - a student token from the cancelled activity resolves to no membership, and `submit` raises `NotAMember`.
-- [ ] T046 [P] [US5] Extend `tests/integration/test_phase_concurrency.py` with the open-vs-cancel race. In 20 rounds, `open_activity` and `cancel_activity` run behind a barrier: exactly one succeeds. Either the activity is OPEN and the cancel raised `CancelRefused(OPEN)`, or it is gone and the open raised `ActivityNotFound`. Add a join-vs-cancel race: the join either succeeds and is then deleted, or raises `JoinRefused`, and no participant row survives.
-- [ ] T047 [P] [US5] Extend `tests/integration/test_live_flow_api.py` with cancel:
+- [X] T046 [P] [US5] Extend `tests/integration/test_phase_concurrency.py` with the open-vs-cancel race. In 20 rounds, `open_activity` and `cancel_activity` run behind a barrier: exactly one succeeds. Either the activity is OPEN and the cancel raised `CancelRefused(OPEN)`, or it is gone and the open raised `ActivityNotFound`. Add a join-vs-cancel race: the join either succeeds and is then deleted, or raises `JoinRefused`, and no participant row survives.
+- [X] T047 [P] [US5] Extend `tests/integration/test_live_flow_api.py` with cancel:
   - `DELETE /api/teacher/activities/{id}` gives 204 on DRAFT, 409 `cancel_refused` on OPEN (message "An OPEN activity can only be ended.") and CLOSED, and 404 on an unknown id;
   - after a cancel, a connected student socket receives `student.state` with `activity: null`, and `GET /api/student/state` with the old cookie shows no membership;
   - a new `POST /api/teacher/activities` gives 201.
 
 ### Implementation for User Story 5
 
-- [ ] T048 [US5] Implement `ActivityService.cancel_activity(activity_id)` and `CancelRefused(phase)` in `src/quizbuzzer/services/activity_service.py`, following `diagrams/002-seq-cancel-activity.puml`. Add the db query `delete_activity`. Publish the displayed activity to teachers and call `student_publisher()` after the commit. Makes T045 and T046 pass.
-- [ ] T049 [US5] Add `DELETE /activities/{activity_id}` to `src/quizbuzzer/api/teacher_routes.py` and the `cancel_refused` 409 handler to `src/quizbuzzer/main.py`. Add a "Cancel activity" button, visible only in DRAFT, with a `confirm()` that names what is deleted, to `src/quizbuzzer/static/teacher.js`. Makes T047 pass.
+- [X] T048 [US5] Implement `ActivityService.cancel_activity(activity_id)` and `CancelRefused(phase)` in `src/quizbuzzer/services/activity_service.py`, following `diagrams/002-seq-cancel-activity.puml`. Add the db query `delete_activity`. Publish the displayed activity to teachers and call `student_publisher()` after the commit. Makes T045 and T046 pass.
+- [X] T049 [US5] Add `DELETE /activities/{activity_id}` to `src/quizbuzzer/api/teacher_routes.py` and the `cancel_refused` 409 handler to `src/quizbuzzer/main.py`. Add a "Cancel activity" button, visible only in DRAFT, with a `confirm()` that names what is deleted, to `src/quizbuzzer/static/teacher.js`. Makes T047 pass.
 
 **Checkpoint**: all five stories work independently.
 

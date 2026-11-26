@@ -286,3 +286,97 @@ def test_import_after_end_creates_a_new_draft(env, db_path):
     assert new.id != a.id and new.phase is Phase.DRAFT
     assert _rows(db_path, a.id) == before
     assert env.svc.get_displayed_activity().id == new.id
+
+
+# --- US5: cancel a DRAFT activity (T045) -----------------------------------------------------
+
+from quizbuzzer.services.activity_service import CancelRefused  # noqa: E402
+from quizbuzzer.services.participation_service import (  # noqa: E402
+    NotAMember,
+    ParticipationService,
+)
+
+
+def _count(db_path, sql, *args):
+    conn = db.connect(db_path)
+    try:
+        return conn.execute(sql, args).fetchone()[0]
+    finally:
+        conn.close()
+
+
+def test_cancel_deletes_a_draft_with_everything_it_owns(env, draft, db_path):
+    part = ParticipationService(db_path)
+    part.join(None, draft.id, 1, "小明")
+    env.svc.cancel_activity(draft.id)
+    assert _count(db_path, "SELECT count(*) FROM activities WHERE id = ?", draft.id) == 0
+    assert _count(db_path, "SELECT count(*) FROM question_units WHERE activity_id = ?", draft.id) == 0
+    assert _count(db_path, "SELECT count(*) FROM answer_slots") == 0
+    assert _count(db_path, "SELECT count(*) FROM participants") == 0
+
+
+def test_cancel_refused_for_open(env, draft, db_path):
+    env.svc.open_activity(draft.id)
+    env.hub.messages.clear()
+    env.student_calls.clear()
+    with pytest.raises(CancelRefused) as info:
+        env.svc.cancel_activity(draft.id)
+    assert info.value.phase is Phase.OPEN
+    assert "can only be ended" in str(info.value)
+    assert phase_in_db(db_path, draft.id) is Phase.OPEN
+    assert env.hub.messages == [] and env.student_calls == []
+
+
+def test_cancel_refused_for_closed_and_rows_kept(env, draft, db_path):
+    set_phase(db_path, draft.id, "CLOSED")
+    before = _rows(db_path, draft.id)
+    with pytest.raises(CancelRefused) as info:
+        env.svc.cancel_activity(draft.id)
+    assert info.value.phase is Phase.CLOSED
+    assert _rows(db_path, draft.id) == before
+
+
+def test_cancel_missing_activity(env):
+    with pytest.raises(ActivityNotFound):
+        env.svc.cancel_activity(999)
+
+
+def test_cancel_publishes_the_displayed_activity_after_commit(env, draft):
+    env.svc.cancel_activity(draft.id)
+    assert env.hub.messages == [{"type": "activity.state", "activity": None}]  # no dashboard
+    assert env.student_calls == [None]  # ran once, after the row was gone
+
+
+def test_cancel_shows_the_latest_closed_activity_to_teachers(env, db_path):
+    old = confirm(env.svc)
+    env.svc.open_activity(old.id)
+    env.svc.end_activity(old.id)
+    new = confirm(env.svc, SINGLE)
+    env.hub.messages.clear()
+    env.svc.cancel_activity(new.id)
+    assert [m["type"] for m in env.hub.messages] == ["activity.state"]
+    assert env.hub.messages[0]["activity"]["id"] == old.id
+    assert env.hub.messages[0]["activity"]["phase"] == "CLOSED"
+
+
+def test_after_cancel_a_new_import_succeeds(env, draft):
+    env.svc.cancel_activity(draft.id)
+    again = confirm(env.svc, SINGLE)
+    assert again.phase is Phase.DRAFT and again.id != draft.id
+
+
+def test_reimport_into_a_cancelled_activity_is_not_found(env, draft):
+    p = env.svc.preview_import(GROUP, 0)
+    env.svc.cancel_activity(draft.id)
+    with pytest.raises(ActivityNotFound):
+        env.svc.replace_questions(draft.id, GROUP, 0, p.fingerprint, True)
+
+
+def test_memberships_of_a_cancelled_activity_stop_working(env, draft, db_path):
+    part = ParticipationService(db_path)
+    token, _ = part.join(None, draft.id, 1, "小明")
+    unit_id = draft.units[0].id
+    env.svc.cancel_activity(draft.id)
+    assert part.resolve_key(token) is None
+    with pytest.raises(NotAMember):
+        part.submit(token, unit_id, [{"subPart": 1, "text": "x"}])

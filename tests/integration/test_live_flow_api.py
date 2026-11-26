@@ -69,3 +69,46 @@ def test_open_pushes_each_student_its_own_snapshot(app, client, student_client):
         assert [u["unitId"] for u in mine["activity"]["units"]] == [u["id"] for u in a["units"]]
         assert mine["membership"] == {"groupNumber": 2, "displayName": "小明"}
         assert next_of_type(wa, "student.state")["state"] == anonymous_state(a, "OPEN")
+
+
+# --- US5: cancel (T047) --------------------------------------------------------------------
+
+
+def test_cancel_draft_204_and_refusals(client):
+    a = create_activity(client)
+    assert client.delete(f"/api/teacher/activities/{a['id']}").status_code == 204
+    assert client.get(f"/api/teacher/activities/{a['id']}").status_code == 404
+    assert client.delete(f"/api/teacher/activities/{a['id']}").status_code == 404
+
+    b = create_activity(client)
+    open_activity(client, b)
+    r = client.delete(f"/api/teacher/activities/{b['id']}")
+    assert r.status_code == 409
+    err = r.json()["error"]
+    assert err["code"] == "cancel_refused" and err["details"] == {"phase": "OPEN"}
+    assert err["message"] == "An OPEN activity can only be ended."
+
+    assert client.post(f"/api/teacher/activities/{b['id']}/end").status_code == 200
+    r = client.delete(f"/api/teacher/activities/{b['id']}")
+    assert r.status_code == 409
+    assert r.json()["error"]["details"] == {"phase": "CLOSED"}
+    assert r.json()["error"]["message"] == "A CLOSED activity is kept and cannot be cancelled."
+    assert client.get(f"/api/teacher/activities/{b['id']}").status_code == 200
+
+
+def test_cancel_moves_students_to_no_activity_and_frees_the_slot(client, student_client):
+    from tests.live_helpers import no_activity_state, recv, student_state
+
+    a = create_activity(client)
+    s = student_client()
+    r = s.post("/api/student/join", json={"activityId": a["id"], "groupNumber": 1, "displayName": "小明"})
+    token = r.cookies["qb_participant"]
+    with s.websocket_connect("/ws/student", headers=cookie(token)) as ws:
+        assert recv(ws)["state"]["membership"]["groupNumber"] == 1
+        assert client.delete(f"/api/teacher/activities/{a['id']}").status_code == 204
+        assert next_of_type(ws, "student.state") == student_state(no_activity_state())
+    assert s.get("/api/student/state").json() == no_activity_state()
+    new = create_activity(client)
+    assert new["phase"] == "DRAFT"
+    state = s.get("/api/student/state").json()
+    assert state["membership"] is None and state["activity"]["id"] == new["id"]

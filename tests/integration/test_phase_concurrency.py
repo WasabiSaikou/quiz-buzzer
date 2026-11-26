@@ -77,3 +77,38 @@ def test_two_simultaneous_opens_exactly_one_wins(fake_adapter, db_path, init_db)
         assert losers[0].phase is Phase.OPEN
         assert phase_of(db_path, a.id) is Phase.OPEN
         close_activity(db_path, a.id)  # free the slot for the next round
+
+
+def test_open_racing_cancel_exactly_one_wins(fake_adapter, db_path, init_db):
+    from quizbuzzer.services.activity_service import ActivityNotFound, CancelRefused
+
+    for _ in range(20):
+        a = new_draft(fake_adapter, db_path)
+        s1, s2 = ActivityService(fake_adapter, db_path), ActivityService(fake_adapter, db_path)
+        results, errors = race(lambda: s1.open_activity(a.id), lambda: s2.cancel_activity(a.id))
+        open_err, cancel_err = errors
+        if open_err is None:
+            assert isinstance(cancel_err, CancelRefused) and cancel_err.phase is Phase.OPEN, errors
+            assert phase_of(db_path, a.id) is Phase.OPEN
+            close_activity(db_path, a.id)
+        else:
+            assert cancel_err is None and isinstance(open_err, ActivityNotFound), errors
+            assert phase_of(db_path, a.id) is None
+
+
+def test_join_racing_cancel_leaves_no_participant(fake_adapter, db_path, init_db):
+    from quizbuzzer.services.participation_service import JoinRefused, ParticipationService
+
+    for _ in range(20):
+        a = new_draft(fake_adapter, db_path)
+        svc, part = ActivityService(fake_adapter, db_path), ParticipationService(db_path)
+        results, errors = race(
+            lambda: part.join(None, a.id, 1, "小明"), lambda: svc.cancel_activity(a.id)
+        )
+        assert errors[1] is None, errors  # the cancel always succeeds on a DRAFT
+        assert errors[0] is None or isinstance(errors[0], JoinRefused), errors
+        conn = db.connect(db_path)
+        try:
+            assert conn.execute("SELECT count(*) FROM participants").fetchone()[0] == 0
+        finally:
+            conn.close()

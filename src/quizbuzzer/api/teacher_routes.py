@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 
 from quizbuzzer.api.schemas import (
     ActivityResponse,
@@ -68,6 +68,13 @@ def get_activity(activity_id: int, request: Request) -> ActivityResponse:
 def open_activity(activity_id: int, request: Request) -> ActivityResponse:
     """002 FR-005: DRAFT -> OPEN (diagrams/002-seq-open-activity.puml)."""
     return ActivityResponse.from_activity(_service(request).open_activity(activity_id))
+
+
+@router.delete("/activities/{activity_id}", status_code=204)
+def cancel_activity(activity_id: int, request: Request) -> Response:
+    """002 FR-008a: cancel (delete) a DRAFT activity (diagrams/002-seq-cancel-activity.puml)."""
+    _service(request).cancel_activity(activity_id)
+    return Response(status_code=204)
 
 
 @router.post("/activities/{activity_id}/end", response_model=ActivityResponse)
