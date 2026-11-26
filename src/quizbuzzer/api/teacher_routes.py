@@ -7,6 +7,8 @@ client and sqlite3 (research R8). Every route here is behind 002's TeacherGuardM
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Request
 
 from quizbuzzer.api.schemas import (
@@ -50,7 +52,8 @@ def create_activity(body: CreateActivityRequest, request: Request) -> ActivityRe
 # Declared before /activities/{activity_id} so "current" is not parsed as an id.
 @router.get("/activities/current", response_model=CurrentActivityResponse)
 def current_activity(request: Request) -> CurrentActivityResponse:
-    activity = _service(request).get_current_activity()
+    # 002 research R7: the displayed activity (current, else the latest CLOSED one).
+    activity = _service(request).get_displayed_activity()
     return CurrentActivityResponse(
         activity=ActivityResponse.from_activity(activity) if activity else None
     )
@@ -65,6 +68,18 @@ def get_activity(activity_id: int, request: Request) -> ActivityResponse:
 def open_activity(activity_id: int, request: Request) -> ActivityResponse:
     """002 FR-005: DRAFT -> OPEN (diagrams/002-seq-open-activity.puml)."""
     return ActivityResponse.from_activity(_service(request).open_activity(activity_id))
+
+
+@router.post("/activities/{activity_id}/end", response_model=ActivityResponse)
+def end_activity(activity_id: int, request: Request) -> ActivityResponse:
+    """002 FR-005: OPEN -> CLOSED (diagrams/002-seq-end-activity.puml)."""
+    return ActivityResponse.from_activity(_service(request).end_activity(activity_id))
+
+
+@router.get("/activities/{activity_id}/dashboard")
+def get_dashboard(activity_id: int, request: Request) -> dict[str, Any]:
+    """002 FR-026 - FR-029 (contracts/rest-api.md: Dashboard)."""
+    return _service(request).get_dashboard(activity_id)
 
 
 @router.post("/activities/{activity_id}/reimport/preview", response_model=PreviewResponse)

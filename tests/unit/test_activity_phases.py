@@ -204,3 +204,85 @@ def test_dashboard_shape(env, draft, db_path):
 def test_dashboard_missing_activity(env):
     with pytest.raises(ActivityNotFound):
         env.svc.get_dashboard(999)
+
+
+# --- US3: end, displayed activity, import after end (T033) --------------------------------
+
+
+def test_end_moves_open_to_closed(env, draft, db_path):
+    env.svc.open_activity(draft.id)
+    env.hub.messages.clear()
+    env.student_calls.clear()
+    ended = env.svc.end_activity(draft.id)
+    assert ended.phase is Phase.CLOSED
+    assert phase_in_db(db_path, draft.id) is Phase.CLOSED
+    assert env.hub.types() == ["activity.state", "dashboard.state"]
+    assert env.hub.messages[0]["activity"]["phase"] == "CLOSED"
+    assert env.student_calls == [Phase.CLOSED]  # published after the commit
+
+
+def test_end_refused_for_draft_suggests_cancel(env, draft, db_path):
+    with pytest.raises(PhaseConflict) as info:
+        env.svc.end_activity(draft.id)
+    assert info.value.phase is Phase.DRAFT
+    assert "Cancel activity" in str(info.value)
+    assert phase_in_db(db_path, draft.id) is Phase.DRAFT
+    assert env.hub.messages == [] and env.student_calls == []
+
+
+def test_end_refused_when_already_closed(env, draft, db_path):
+    set_phase(db_path, draft.id, "CLOSED")
+    with pytest.raises(PhaseConflict) as info:
+        env.svc.end_activity(draft.id)
+    assert info.value.phase is Phase.CLOSED
+    assert env.hub.messages == [] and env.student_calls == []
+
+
+def test_end_missing_activity(env):
+    with pytest.raises(ActivityNotFound):
+        env.svc.end_activity(999)
+
+
+def test_closing_with_zero_submissions(env, draft):
+    env.svc.open_activity(draft.id)
+    env.svc.end_activity(draft.id)
+    d = env.svc.get_dashboard(draft.id)
+    assert d["phase"] == "CLOSED"
+    assert len(d["units"]) == len(draft.units)
+    assert all(u["submissions"] == [] for u in d["units"])
+    assert [g["number"] for g in d["groups"]] == [1, 2, 3, 4, 5, 6]
+
+
+def test_displayed_activity(env, db_path):
+    assert env.svc.get_displayed_activity() is None
+    a = confirm(env.svc)
+    assert env.svc.get_displayed_activity().id == a.id  # the DRAFT one
+    env.svc.open_activity(a.id)
+    assert env.svc.get_displayed_activity().phase is Phase.OPEN
+    env.svc.end_activity(a.id)
+    shown = env.svc.get_displayed_activity()
+    assert shown.id == a.id and shown.phase is Phase.CLOSED  # latest CLOSED when none current
+    assert env.svc.get_current_activity() is None  # "current" still means DRAFT/OPEN only
+
+
+def _rows(db_path, activity_id):
+    conn = db.connect(db_path)
+    try:
+        return (
+            [tuple(r) for r in conn.execute("SELECT * FROM activities WHERE id = ?", (activity_id,))],
+            [tuple(r) for r in conn.execute(
+                "SELECT * FROM question_units WHERE activity_id = ? ORDER BY id", (activity_id,))],
+        )
+    finally:
+        conn.close()
+
+
+def test_import_after_end_creates_a_new_draft(env, db_path):
+    a = confirm(env.svc)
+    env.svc.open_activity(a.id)
+    env.svc.end_activity(a.id)
+    before = _rows(db_path, a.id)
+    new = confirm(env.svc, SINGLE)  # FR-020a: a CLOSED activity never blocks an import
+    assert new.id != a.id and new.phase is Phase.DRAFT
+    assert _rows(db_path, a.id) == before
+    assert env.svc.get_displayed_activity().id == new.id

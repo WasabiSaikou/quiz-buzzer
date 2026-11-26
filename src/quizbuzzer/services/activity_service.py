@@ -298,6 +298,22 @@ class ActivityService:
         """DRAFT -> OPEN, checked and changed in one transaction (FR-005, FR-006)."""
         return self._transition(activity_id, "open", Phase.DRAFT, Phase.OPEN)
 
+    def end_activity(self, activity_id: int) -> Activity:
+        """OPEN -> CLOSED in one transaction; serialises with every submit (FR-017)."""
+        return self._transition(activity_id, "end", Phase.OPEN, Phase.CLOSED)
+
+    def get_displayed_activity(self) -> Activity | None:
+        """The teacher's view (research R7): DRAFT/OPEN, else the latest CLOSED, else None.
+
+        Display only: creating an activity still checks find_current_activity (DRAFT/OPEN).
+        """
+        conn = db.connect(self.db_path)
+        try:
+            row = db.find_current_activity(conn) or db.find_latest_activity(conn)
+            return db.get_activity_with_units(conn, row["id"]) if row else None
+        finally:
+            conn.close()
+
     def _transition(self, activity_id: int, action: str, required: Phase, target: Phase) -> Activity:
         conn = db.connect(self.db_path)
         try:

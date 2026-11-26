@@ -60,13 +60,34 @@ def anonymous_state(activity: dict, phase: str | None = None) -> dict[str, Any]:
     }
 
 
-def next_of_type(ws, message_type: str, limit: int = 10) -> dict[str, Any]:
-    """Receive until a message of `message_type` arrives (skipping other snapshot types).
+RECEIVE_TIMEOUT = 5.0
 
-    Only call this when such a message is certain to come: WebSocket receives block.
+
+def recv(ws, timeout: float = RECEIVE_TIMEOUT) -> dict[str, Any]:
+    """ws.receive_json() with a timeout, so a missing push fails the test instead of hanging.
+
+    Uses the TestClient session's own portal and stream (test-only use of Starlette internals).
     """
+    import json
+
+    import anyio
+
+    async def _receive():
+        with anyio.fail_after(timeout):
+            return await ws._send_rx.receive()
+
+    try:
+        message = ws.portal.call(_receive)
+    except TimeoutError as exc:
+        raise AssertionError(f"no WebSocket message within {timeout} s") from exc
+    ws._raise_on_close(message)
+    return json.loads(message["text"])
+
+
+def next_of_type(ws, message_type: str, limit: int = 10) -> dict[str, Any]:
+    """Receive until a message of `message_type` arrives (skipping other snapshot types)."""
     for _ in range(limit):
-        message = ws.receive_json()
+        message = recv(ws)
         if message["type"] == message_type:
             return message
     raise AssertionError(f"no {message_type} within {limit} messages")

@@ -137,6 +137,8 @@ def test_replace_pushes_activity_state(client, draft):
     fp = reimport_preview(client, draft["id"]).json()["fingerprint"]
     with client.websocket_connect("/ws/teacher") as ws:
         assert ws.receive_json()["activity"]["totals"] == {"units": 5, "slots": 5}
+        # 002 contracts/websocket.md: connect also sends the displayed activity's dashboard.
+        assert ws.receive_json()["type"] == "dashboard.state"
         assert put_questions(client, draft["id"], fp).status_code == 200
         msg = ws.receive_json()
         assert msg["type"] == "activity.state"

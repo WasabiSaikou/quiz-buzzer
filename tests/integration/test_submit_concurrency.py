@@ -93,3 +93,42 @@ def test_two_members_of_one_group_exactly_one_accepted(fake_adapter, db_path):
         assert isinstance(refused[0], AlreadySubmitted)
         assert refused[0].submission["answers"] == accepted[0]["answers"]
         assert unit_ranks(db_path, unit.id) == [(2, 1)]
+
+
+def test_submit_racing_end_is_all_or_nothing(fake_adapter, db_path):
+    """SC-004 / FR-017: every submission is either ranked before the close or refused."""
+    from quizbuzzer.services.activity_service import ActivityService
+    from quizbuzzer.services.participation_service import ActivityEnded
+
+    init_schema(db_path)
+    for _ in range(50):
+        activity = make_activity(fake_adapter, db_path, n_units=7, group_count=6, phase="DRAFT")
+        joiner = ParticipationService(db_path)
+        tokens = {g: joiner.join(None, activity.id, g, f"g{g}")[0] for g in range(1, 7)}
+        conn = db.connect(db_path)
+        conn.execute("UPDATE activities SET phase = 'OPEN' WHERE id = ?", (activity.id,))
+        conn.close()
+        singles = [u for u in activity.units if len(u.slots) == 1][:6]
+        services = {g: ParticipationService(db_path) for g in tokens}
+        ender = ActivityService(fake_adapter, db_path)
+        calls = [
+            (lambda g=g, u=u: services[g].submit(tokens[g], u.id, answers_for(u)))
+            for g, u in zip(tokens, singles, strict=True)
+        ]
+        calls.append(lambda a=activity: ender.end_activity(a.id))
+        results, errors = race(calls)
+        assert errors[-1] is None, errors[-1]  # the end itself always succeeds
+        submit_errors = [e for e in errors[:-1] if e is not None]
+        assert all(isinstance(e, ActivityEnded) for e in submit_errors), submit_errors
+        accepted = sum(1 for r in results[:-1] if r is not None)
+        conn = db.connect(db_path)
+        try:
+            stored = [tuple(r) for r in conn.execute(
+                "SELECT s.unit_id, s.rank FROM submissions s JOIN question_units u ON s.unit_id = u.id "
+                "WHERE u.activity_id = ?", (activity.id,))]
+            phase = conn.execute("SELECT phase FROM activities WHERE id = ?", (activity.id,)).fetchone()[0]
+        finally:
+            conn.close()
+        assert phase == "CLOSED"
+        assert len(stored) == accepted  # every accepted submission is stored, nothing else
+        assert all(rank == 1 for _, rank in stored)  # one group per unit here: rank 1 each

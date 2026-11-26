@@ -64,3 +64,45 @@ def test_disconnected_socket_is_dropped(client, app):
         ws.receive_json()
     create(client)  # must not fail although the socket is gone
     assert len(app.state.hub) == 0
+
+
+# --- 002 (T036): cookie required, dashboard.state on connect, displayed CLOSED activity ------
+
+from tests.live_helpers import recv  # noqa: E402  (timed receive: a missing push fails, not hangs)
+
+
+def test_no_dashboard_state_without_a_displayed_activity(client):
+    with client.websocket_connect("/ws/teacher") as ws:
+        assert recv(ws) == {"type": "activity.state", "activity": None}
+        a = create(client)
+        # The next message is the create push, so no dashboard.state was queued on connect.
+        assert recv(ws) == {"type": "activity.state", "activity": summary(a)}
+
+
+def test_connect_sends_activity_then_dashboard(client):
+    a = create(client)
+    with client.websocket_connect("/ws/teacher") as ws:
+        assert recv(ws) == {"type": "activity.state", "activity": summary(a)}
+        dashboard = recv(ws)
+        assert dashboard["type"] == "dashboard.state"
+        assert dashboard["dashboard"]["activityId"] == a["id"]
+
+
+def test_displayed_closed_activity_after_end(client):
+    a = create(client)
+    client.post(f"/api/teacher/activities/{a['id']}/open")
+    client.post(f"/api/teacher/activities/{a['id']}/end")
+    with client.websocket_connect("/ws/teacher") as ws:
+        state = recv(ws)
+        assert state["activity"]["id"] == a["id"] and state["activity"]["phase"] == "CLOSED"
+        assert recv(ws)["dashboard"]["phase"] == "CLOSED"
+
+
+def test_teacher_socket_requires_the_cookie(anon_client):
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    with anon_client.websocket_connect("/ws/teacher") as ws:
+        with pytest.raises(WebSocketDisconnect) as info:
+            ws.receive_json()
+    assert info.value.code == 4401

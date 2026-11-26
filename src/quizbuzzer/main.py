@@ -270,6 +270,7 @@ def create_app(
         app.state.hub,
         student_publisher=app.state.participation.publish_student_states,
     )
+    app.state.participation.teacher_publisher = app.state.service.publish_dashboard
     app.state.teacher_sessions = TeacherSessions(settings.teacher_passcode.strip())
 
     _register_core_errors(app)

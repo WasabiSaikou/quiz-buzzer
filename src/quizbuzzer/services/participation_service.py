@@ -369,10 +369,15 @@ class ParticipationService:
     # --- after-commit hooks (US3 teacher dashboard, US4 group push) ---------------------------
 
     def _after_group_change(self, activity_id: int, group_number: int) -> None:
-        pass
+        self._publish_teacher(activity_id)
 
     def _after_submission(self, activity_id: int, group_number: int) -> None:
-        pass
+        self._publish_teacher(activity_id)
+
+    def _publish_teacher(self, activity_id: int) -> None:
+        """dashboard.state to every teacher tab (FR-027, FR-028)."""
+        if self.teacher_publisher is not None:
+            self.teacher_publisher(activity_id)
 
     # --- publishing ------------------------------------------------------------------------
 

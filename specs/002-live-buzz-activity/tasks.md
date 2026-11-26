@@ -320,7 +320,7 @@ the final dashboard survives a refresh (FR-026 – FR-029, FR-005, FR-017).
 
 ### Tests for User Story 3 (write first, observe failing) ⚠️
 
-- [ ] T033 [P] [US3] Extend `tests/unit/test_activity_phases.py` with the end, dashboard and displayed-activity parts:
+- [X] T033 [P] [US3] Extend `tests/unit/test_activity_phases.py` with the end, dashboard and displayed-activity parts:
   - `end_activity` on OPEN returns phase CLOSED;
   - **closing with zero submissions** (US3 AS6, edge case): `end_activity` on an OPEN activity with no submissions succeeds, and `get_dashboard` then lists every unit with `submissions: []` and every group;
   - on DRAFT it raises `PhaseConflict(DRAFT)`, and the message contains "Cancel activity";
@@ -329,19 +329,19 @@ the final dashboard survives a refresh (FR-026 – FR-029, FR-005, FR-017).
   - `get_dashboard(id)` matches `contracts/rest-api.md › Dashboard`: units in position order, submissions in rank order with `isWinner` only on rank 1, `receivedAt` present, groups 1..group_count including empty ones, members in join order with duplicates kept;
   - `get_displayed_activity()` returns the DRAFT/OPEN activity, else the latest CLOSED one, else `None`;
   - **import after end**: after `end_activity`, `create_from_import` succeeds (a new DRAFT), the CLOSED activity's rows are unchanged, and `get_displayed_activity()` returns the new DRAFT (FR-020a, research R7).
-- [ ] T034 [P] [US3] Extend `tests/integration/test_submit_concurrency.py` with the submit-vs-end race (FR-017, SC-004). In 50 rounds, 6 threads submit to distinct units while one thread calls `end_activity`, all behind one barrier. After each round:
+- [X] T034 [P] [US3] Extend `tests/integration/test_submit_concurrency.py` with the submit-vs-end race (FR-017, SC-004). In 50 rounds, 6 threads submit to distinct units while one thread calls `end_activity`, all behind one barrier. After each round:
   - every accepted submission is in the DB with a rank, and those ranks are contiguous per unit;
   - every rejection is `ActivityEnded`;
   - no exception other than those two occurs;
   - the activity is CLOSED.
-- [ ] T035 [P] [US3] Write `tests/integration/test_dashboard_api.py`:
+- [X] T035 [P] [US3] Write `tests/integration/test_dashboard_api.py`:
   - `GET /api/teacher/activities/{id}/dashboard` gives 200 in the contract shape (404 for an unknown id);
   - two `/ws/teacher` sockets receive `dashboard.state` after a join, a leave (DRAFT), each accepted submission, open and end;
   - `POST …/end` gives 200 CLOSED; 409 `phase_conflict` on a DRAFT activity, with the Cancel hint; 409 on CLOSED; 404 on an unknown id;
   - after end, every student socket receives a CLOSED `student.state` holding only its own group's submissions, and `POST /api/student/submissions` gives 409 `activity_ended`;
   - `GET /api/teacher/activities/current` and a fresh `/ws/teacher` connect return the CLOSED activity plus `dashboard.state`;
   - **import after end through the API**: `POST /api/teacher/activities` gives 201 DRAFT, `GET /activities/current` returns the new DRAFT, and the old CLOSED one is unchanged through `GET /activities/{id}`.
-- [ ] T036 [P] [US3] Update `tests/integration/test_ws_teacher.py` (001):
+- [X] T036 [P] [US3] Update `tests/integration/test_ws_teacher.py` (001):
   - connect with the teacher cookie;
   - on connect, `activity.state` and then `dashboard.state` when a displayed activity exists;
   - `activity: null` and no `dashboard.state` on a fresh DB;
@@ -349,9 +349,9 @@ the final dashboard survives a refresh (FR-026 – FR-029, FR-005, FR-017).
 
 ### Implementation for User Story 3
 
-- [ ] T037 [US3] Implement `end_activity`, `get_dashboard` and `get_displayed_activity` in `src/quizbuzzer/services/activity_service.py`, following `diagrams/002-seq-end-activity.puml`. Add the db queries `list_dashboard_submissions` and `list_members_by_group` to `src/quizbuzzer/db.py` (`find_latest_activity` already exists from T015). `create_from_import` keeps using `db.find_current_activity` (do not change it). Makes T033 and T034 pass.
-- [ ] T038 [US3] Add `POST /activities/{activity_id}/end` and `GET /activities/{activity_id}/dashboard` to `src/quizbuzzer/api/teacher_routes.py`, and make `GET /activities/current` return the displayed activity (`contracts/rest-api.md › Change to 001`). In `src/quizbuzzer/api/ws_routes.py`, `/ws/teacher` on connect sends `activity.state` for the displayed activity plus `dashboard.state`. Add `ActivityService.publish_teacher_state(activity_id)` and pass it to `ParticipationService` as a `teacher_publisher` callback, which join, leave and submit call after their commit (`contracts/websocket.md › /ws/teacher`). Makes T035 and T036 pass.
-- [ ] T039 [US3] Extend `src/quizbuzzer/static/teacher.js` and `teacher.html` with the dashboard and End:
+- [X] T037 [US3] Implement `end_activity`, `get_dashboard` and `get_displayed_activity` in `src/quizbuzzer/services/activity_service.py`, following `diagrams/002-seq-end-activity.puml`. Add the db queries `list_dashboard_submissions` and `list_members_by_group` to `src/quizbuzzer/db.py` (`find_latest_activity` already exists from T015). `create_from_import` keeps using `db.find_current_activity` (do not change it). Makes T033 and T034 pass.
+- [X] T038 [US3] Add `POST /activities/{activity_id}/end` and `GET /activities/{activity_id}/dashboard` to `src/quizbuzzer/api/teacher_routes.py`, and make `GET /activities/current` return the displayed activity (`contracts/rest-api.md › Change to 001`). In `src/quizbuzzer/api/ws_routes.py`, `/ws/teacher` on connect sends `activity.state` for the displayed activity plus `dashboard.state`. Add `ActivityService.publish_teacher_state(activity_id)` and pass it to `ParticipationService` as a `teacher_publisher` callback, which join, leave and submit call after their commit (`contracts/websocket.md › /ws/teacher`). Makes T035 and T036 pass.
+- [X] T039 [US3] Extend `src/quizbuzzer/static/teacher.js` and `teacher.html` with the dashboard and End:
   - render `dashboard.state`: units in order, submissions as rank, group, submitter, answers labelled （k）, and the receive time shown in local time; a winner badge on rank 1; "No submissions yet" for units without any; a group list with members and counts;
   - an "End" button, visible only in OPEN, with `confirm()`;
   - when the displayed activity is CLOSED, show the final dashboard plus an "Import a new worksheet" button that opens 001's import form;
