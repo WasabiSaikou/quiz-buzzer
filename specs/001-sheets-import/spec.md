@@ -132,7 +132,8 @@ cells match the preview exactly.
    confirms, **Then** no activity is created and the teacher is shown the updated preview.
 6. **Given** an activity already exists in DRAFT or OPEN, **When** the teacher tries to create a
    new activity, **Then** it is refused with a message naming the current activity and its
-   phase, and suggesting re-import (if DRAFT) or closing it first (if OPEN).
+   phase. For a DRAFT activity it suggests re-importing into it or cancelling it (feature 002,
+   FR-008a). For an OPEN activity it suggests ending it first.
 7. **Given** only CLOSED activities exist, **When** the teacher confirms a clean preview,
    **Then** the new activity is created and the CLOSED activities are kept unchanged.
 
@@ -402,3 +403,9 @@ setup) and verify re-import is refused.
   activity, plus a simple list of past CLOSED activities for viewing results. Building that list
   and the results/CSV view is outside this feature; this feature only guarantees it never deletes
   or alters CLOSED activities (FR-020a).
+- **Feature 002 — displayed activity after End (recorded 2026-11-27)**: when no DRAFT or OPEN
+  activity exists, the teacher's "current activity" view (`GET /api/teacher/activities/current`
+  and the teacher live channel) shows the most recently CLOSED activity with its final dashboard,
+  plus a way to import a new worksheet. That CLOSED activity never blocks a new import: only a
+  DRAFT or OPEN activity does (FR-020a, US2 acceptance scenario 7). This is covered by
+  `test_create_after_previous_activity_closed_201`.

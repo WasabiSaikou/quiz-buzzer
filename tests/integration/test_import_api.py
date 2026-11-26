@@ -209,7 +209,33 @@ def test_create_when_current_exists_409(client):
     err = r.json()["error"]
     assert err["code"] == "current_activity_exists"
     assert err["details"]["activity"] == {"id": first["id"], "title": first["title"], "phase": "DRAFT"}
-    assert "re-import" in err["message"].lower()
+    message = err["message"].lower()
+    assert "re-import" in message
+    assert "cancel" in message  # 002 FR-008a: a DRAFT activity can be cancelled
+
+
+def test_create_after_previous_activity_closed_201(client, db_path):
+    """Only a DRAFT/OPEN activity blocks a new import, never a CLOSED one (FR-020a, US2 AS7).
+
+    Feature 002 ends activities through POST /activities/{id}/end; until then the phase is set
+    directly. The CLOSED activity must be untouched by the new import.
+    """
+    from quizbuzzer import db
+
+    old = create(client).json()
+    conn = db.connect(db_path)
+    try:
+        conn.execute("UPDATE activities SET phase = 'CLOSED' WHERE id = ?", (old["id"],))
+    finally:
+        conn.close()
+    closed_before = client.get(f"/api/teacher/activities/{old['id']}").json()
+
+    r = create(client, SINGLE)
+    assert r.status_code == 201, r.json()
+    new = r.json()
+    assert new["id"] != old["id"] and new["phase"] == "DRAFT"
+    assert client.get(f"/api/teacher/activities/{old['id']}").json() == closed_before
+    assert client.get("/api/teacher/activities/current").json() == {"activity": new}
 
 
 def test_get_current_and_by_id(client):

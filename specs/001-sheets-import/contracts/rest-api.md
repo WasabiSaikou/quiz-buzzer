@@ -130,6 +130,18 @@ Response 201: an `Activity` (see below).
 Response 200: `{ "activity": Activity }`, or `{ "activity": null }` when there is no DRAFT or
 OPEN activity.
 
+**Changed by feature 002** ([002 research R7](../../002-live-buzz-activity/research.md#r7-teacher-view-after-end-fr-029),
+[002 contract](../../002-live-buzz-activity/contracts/rest-api.md#change-to-001-get-apiteacheractivitiescurrent-research-r7)):
+this endpoint returns the teacher's *displayed* activity:
+1. the DRAFT/OPEN activity, if one exists;
+2. otherwise the most recently CLOSED activity (`"phase": "CLOSED"`), so that the final dashboard
+   survives a refresh after End;
+3. otherwise `{ "activity": null }`.
+
+A CLOSED activity returned here **does not block** creating a new one. `POST /activities` is
+refused (409 `current_activity_exists`) only while a DRAFT or OPEN activity exists (FR-020a).
+Until 002 is implemented, case 2 returns `null`.
+
 ## GET /api/teacher/activities/{id}
 
 Response 200: `Activity`. Returns 404 `not_found` if the activity does not exist (service

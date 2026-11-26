@@ -41,7 +41,7 @@ else valid
     alt a current (non-CLOSED) activity exists
       ACT -> DB : ROLLBACK
       ACT --> API : raise CurrentActivityExists(activity, phase)
-      API --> TUI : 409 current_activity_exists;\nsuggest re-import (DRAFT) or close (OPEN)
+      API --> TUI : 409 current_activity_exists;\nsuggest re-import or cancel (DRAFT, 002)\nor end (OPEN)
     else none
       ACT -> DB : insert activities (phase = DRAFT, group_count, source)
       ACT -> DB : insert question_units + answer_slots\n(answer cell locations)

@@ -81,9 +81,9 @@ class CurrentActivityExists(Exception):
         self.title = title
         self.phase = phase
         hint = (
-            "Re-import into it to replace its questions."
+            "Re-import into it to replace its questions, or cancel it to start over."
             if phase is Phase.DRAFT
-            else "Close it before creating a new activity."
+            else "End it before creating a new activity."
         )
         super().__init__(
             f'Activity "{title}" is still {phase.value}; only one activity can be current. {hint}'

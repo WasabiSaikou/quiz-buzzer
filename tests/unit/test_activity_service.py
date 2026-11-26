@@ -239,6 +239,13 @@ def test_current_activity_blocks_create(svc, db_path, phase):
         first.title,
         Phase(phase),
     )
+    message = str(info.value).lower()
+    if phase == "DRAFT":
+        # 001 US2 AS6 + 002 FR-008a: re-import into it, or cancel it.
+        assert "re-import" in message and "cancel" in message
+    else:
+        # An OPEN activity can only be ended (002 FR-008b), never cancelled.
+        assert "end it" in message and "cancel" not in message
     assert counts(db_path)[0] == 1
 
 

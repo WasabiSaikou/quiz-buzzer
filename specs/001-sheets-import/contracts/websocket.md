@@ -37,6 +37,12 @@ When there is no current (DRAFT/OPEN) activity:
 The message carries a summary only; clients fetch full detail with
 `GET /api/teacher/activities/{id}`.
 
+**Changed by feature 002** ([002 websocket contract](../../002-live-buzz-activity/contracts/websocket.md)):
+`activity` is the teacher's *displayed* activity. That is the DRAFT/OPEN one, otherwise the most
+recently CLOSED one, otherwise `null`, as for `GET /api/teacher/activities/current`. A CLOSED
+activity shown here never blocks a new import. 002 also adds `dashboard.state` and requires the
+teacher cookie on connect.
+
 ## Client → server
 
 None in this feature. Any frame received is ignored. Unknown `type` values are reserved for

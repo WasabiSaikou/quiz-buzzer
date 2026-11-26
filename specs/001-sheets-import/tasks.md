@@ -243,7 +243,7 @@ preview.
 - [X] T038 [US2] Extend `src/quizbuzzer/static/teacher.html` and `teacher.js` with:
   - a group-count number input prefilled with 4, range 2–12 (spec Assumptions); the server is still authoritative;
   - a confirm button disabled while `canConfirm` is false, and a warnings acknowledgement checkbox that is required when warnings exist;
-  - handling for `preview_changed`, which re-renders `details.preview`, and for `current_activity_exists`, which names the activity and its phase and suggests re-import (DRAFT) or closing it (OPEN);
+  - handling for `preview_changed`, which re-renders `details.preview`, and for `current_activity_exists`, which names the activity and its phase and suggests re-import or cancel (DRAFT) or ending it (OPEN) (message amended 2026-11-27 for feature 002's cancel, FR-008a);
   - a "current activity" panel driven by `/ws/teacher` `activity.state` that fetches details via `GET /activities/{id}`, so a second tab updates without reloading (M6).
 
   When an activity is current, show it instead of the new-import form.
