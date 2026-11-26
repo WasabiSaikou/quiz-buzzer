@@ -74,4 +74,19 @@ note left of API
   require feature 002's teacher
   passcode check.
 end note
+
+note bottom of SA
+  main.py builds GoogleSheetsAdapter lazily
+  (LazyGoogleSheetsAdapter) so the app starts
+  without Google access; tests inject
+  FakeSheetsAdapter via create_app(adapter=...).
+end note
+
+note as SUPPORT
+  Supporting modules (not drawn as components):
+  main.py (create_app, error envelope),
+  config.py (Settings from .env),
+  api/schemas.py (camelCase request/response models),
+  models.py (domain + transient types; see domain-class).
+end note
 @enduml

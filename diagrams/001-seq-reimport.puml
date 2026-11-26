@@ -19,7 +19,10 @@ TUI -> API : POST /api/teacher/activities/{id}/reimport/preview\n{url, sheetId}
 API -> ACT : preview_reimport(activity_id, url, sheet_id)
 ACT -> ACT : check_reimport_allowed(activity_id)
 ACT -> DB : read activity phase
-alt phase is OPEN or CLOSED
+alt activity does not exist
+  ACT --> API : raise ActivityNotFound
+  API --> TUI : 404 not_found
+else phase is OPEN or CLOSED
   ACT --> API : raise ReimportRefused(phase)
   API --> TUI : 409 reimport_refused\n"activity is <phase>"
 else phase is DRAFT
@@ -44,7 +47,11 @@ else phase is DRAFT
   else ok
     ACT -> DB : BEGIN IMMEDIATE
     ACT -> DB : re-check phase = DRAFT
-    alt phase changed to OPEN or CLOSED
+    alt activity no longer exists
+      ACT -> DB : ROLLBACK
+      ACT --> API : raise ActivityNotFound
+      API --> TUI : 404 not_found
+    else phase changed to OPEN or CLOSED
       ACT -> DB : ROLLBACK
       ACT --> API : raise ReimportRefused(phase)
       API --> TUI : 409 reimport_refused, questions unchanged

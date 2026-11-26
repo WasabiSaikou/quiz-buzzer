@@ -24,8 +24,8 @@ class Activity {
   sourceSpreadsheetId : str
   sourceSheetId : int
   sourceTabTitle : str
-  createdAt : datetime
-  importedAt : datetime
+  createdAt : str {ISO-8601 UTC}
+  importedAt : str {ISO-8601 UTC}
 }
 
 class QuestionUnit {
@@ -105,4 +105,65 @@ note left of QuestionUnit
   kind = GROUP_SET (題組) when it has
   2+ slots, otherwise SINGLE.
 end note
+
+package "Transient import types (not stored)" <<Rectangle>> {
+  class SpreadsheetInfo {
+    spreadsheetId : str
+    title : str
+    tabs : TabInfo[]
+    requestedGid : int | None
+    preselectedSheetId() : int
+  }
+  class TabInfo {
+    sheetId : int
+    title : str
+    index : int
+  }
+  class TabData {
+    spreadsheetId : str
+    spreadsheetTitle : str
+    sheetId : int
+    title : str
+    grid : str[][]
+    merges : (r0, r1, c0, c1)[]
+  }
+  class ImportPreview {
+    header : HeaderInfo | None
+    units : ParsedUnit[]
+    issues : Issue[]
+    spreadsheetId, sheetId, tabTitle
+    fingerprint : str
+    canConfirm() : bool
+  }
+  class HeaderInfo {
+    row : int
+    numberColumn : int
+    answerColumn : int
+  }
+  class ParsedUnit {
+    number : int
+    kind : UnitKind
+    sourceRow : int
+  }
+  class ParsedSlot {
+    subPart : int
+    row : int
+    column : int
+    a1Ref : str
+    existingText : str
+  }
+  class Issue {
+    severity : error | warning
+    code : str
+    message : str
+    cells : str[]
+    rows : int[]
+  }
+}
+
+SpreadsheetInfo *-- TabInfo
+ImportPreview *-- HeaderInfo
+ImportPreview *-- ParsedUnit
+ImportPreview *-- Issue
+ParsedUnit *-- ParsedSlot
 @enduml

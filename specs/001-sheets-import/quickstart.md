@@ -74,7 +74,7 @@ Expected: exit code 0, with a fresh `.png` next to every `.puml`.
 
 ## 6. Manual validation scenarios
 
-Record each run in `specs/001-sheets-import/verification.md` with the date, tester, steps and
+Record each run in `docs/verification.md` with the date, tester, steps and
 observed result (Principle V).
 
 | # | Steps | Expected |

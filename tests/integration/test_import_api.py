@@ -232,3 +232,84 @@ def test_create_never_writes_to_sheet(client, fake_adapter):
     before = fake_adapter.snapshot()
     assert create(client).status_code == 201
     assert fake_adapter.snapshot() == before
+
+
+# --- Polish: log hygiene (Principle VI) and preview performance (SC-001) -------------------
+
+SENTINEL = "SENTINEL-秘密-7f3a9c"
+
+
+def test_logs_never_contain_cell_text_or_credentials(
+    fake_adapter, db_path, tmp_path, caplog, monkeypatch
+):
+    import logging
+
+    from fastapi.testclient import TestClient
+
+    from quizbuzzer.config import Settings
+    from quizbuzzer.main import create_app
+
+    key_path = tmp_path / f"key-{SENTINEL}.json"
+    settings = Settings(credentials_path=key_path, db_path=db_path, host="127.0.0.1", port=8000)
+    grid = [
+        ["題號", "題目", "作答"],
+        ["1", f"question text {SENTINEL}", f"答：{SENTINEL}"],  # -> slot_cell_has_text warning
+        ["", "", f"note {SENTINEL}"],  # -> stray_answer_text warning
+        ["2", f"{SENTINEL}", "（1）"],
+        ["", "", f"（2）{SENTINEL}"],
+    ]
+    fake_adapter.add_spreadsheet(
+        "logcheck", f"Book {SENTINEL}",
+        [
+            {"sheetId": 0, "title": f"Tab {SENTINEL}", "index": 0, "grid": grid},
+            {"sheetId": 1, "title": "Other", "index": 1, "grid": [["題號", "作答"], ["1", SENTINEL]]},
+        ],
+    )
+    url = "https://docs.google.com/spreadsheets/d/logcheck/edit"
+    caplog.set_level(logging.DEBUG)
+    with TestClient(create_app(adapter=fake_adapter, db_path=db_path, settings=settings)) as c:
+        c.post("/api/teacher/import/tabs", json={"url": url})
+        p = c.post("/api/teacher/import/preview", json={"url": url, "sheetId": 0}).json()
+        assert any(SENTINEL in i["message"] for i in p["issues"])  # the teacher does see it
+        a = c.post("/api/teacher/activities", json={
+            "url": url, "sheetId": 0, "groupCount": 4, "fingerprint": p["fingerprint"],
+            "acknowledgeWarnings": True}).json()
+        c.post("/api/teacher/activities", json={  # refused: current activity exists
+            "url": url, "sheetId": 0, "groupCount": 4, "fingerprint": p["fingerprint"],
+            "acknowledgeWarnings": True})
+        p2 = c.post(f"/api/teacher/activities/{a['id']}/reimport/preview",
+                    json={"url": url, "sheetId": 1}).json()
+        c.put(f"/api/teacher/activities/{a['id']}/questions", json={
+            "url": url, "sheetId": 1, "fingerprint": p2["fingerprint"], "acknowledgeWarnings": False})
+        fake_adapter.fail_with(SheetNotShared("sa@example.com"))
+        c.post("/api/teacher/import/preview", json={"url": url, "sheetId": 0})
+
+    assert caplog.records, "expected some log records to inspect"
+    for record in caplog.records:
+        text = record.getMessage()
+        assert SENTINEL not in text, record.name
+        assert str(key_path) not in text, record.name
+
+
+def test_preview_of_200_row_sheet_is_fast(client, fake_adapter):
+    import time
+
+    grid = [["", "題號", "題目", "", "作答"]]
+    n = 1
+    while len(grid) < 201:  # 200 rows below the header: singles, 題組 and spacer rows
+        if n % 3 == 0:
+            grid += [["", str(n), f"q{n}", "", "（1）"], ["", "", "", "", "（2）"], ["", "", "", "", "（3）"]]
+        else:
+            grid += [["", str(n), f"q{n}", "", ""]]
+        grid.append([])
+        n += 1
+    grid = grid[:201]
+    fake_adapter.add_spreadsheet(
+        "big", "Big", [{"sheetId": 0, "title": "Sheet1", "index": 0, "grid": grid}]
+    )
+    start = time.perf_counter()
+    body = preview(client, "https://docs.google.com/spreadsheets/d/big/edit", 0)
+    elapsed = time.perf_counter() - start
+    assert body["totals"]["units"] > 50
+    # SC-001 allows 5 s end to end; local parse + HTTP must leave almost all of it for Google.
+    assert elapsed < 1.0, f"preview took {elapsed:.3f}s"

@@ -96,7 +96,7 @@ calls plus an O(rows) parse.
 | II. Dynamic Guided Notes handling | `parse(grid, merges)` derives the header, columns, rows and slots from content only. The A1 reference is computed from row/column indices. The parser suite runs against at least 3 differently shaped fixtures (`template_single`, `template_group` + `shifted_layout`). | ✅ | ✅ |
 | III. Information hiding until close | 001 only has teacher endpoints and sockets; no group data exists yet. The student channel is deferred, and the visibility filter is required there. | ✅ (N/A) | ✅ (N/A) |
 | IV. Single source of truth for phase | Phase lives only in SQLite. `activity.state` is pushed after every change and sent on connect, so reconnecting clients recover. | ✅ | ✅ |
-| V. Test-first for core rules | Parser, phase rules (create/re-import refusal, one current activity) and fingerprint/confirm tests are written and seen failing before the code. `verification.md` holds the manual records M1–M10 (quickstart). Export tests belong to 003. | ✅ | ✅ |
+| V. Test-first for core rules | Parser, phase rules (create/re-import refusal, one current activity) and fingerprint/confirm tests are written and seen failing before the code. `docs/verification.md` holds the manual records M1–M10 (quickstart) and the test-first record. Export tests belong to 003. | ✅ | ✅ |
 | VI. Secrets hygiene | The key path comes from `.env` (`GOOGLE_APPLICATION_CREDENTIALS`). `.env.example` has placeholders only. `secrets/`, `.env` and `*.db` are gitignored. Logs record issue codes and IDs, never cell text or credentials. | ✅ | ✅ |
 | VII. Consistency and simplicity | The diagrams were updated in this plan. No ORM, no frontend build, no `uvicorn[standard]`. Only tables for 001 are created. The README dependency/licence table comes from research R10. | ✅ | ✅ |
 | VIII. PlantUML design-first | The diagrams drive the module names (table above). They were re-rendered with `java -jar tools/plantuml.jar "./diagrams/*.puml"` (exit 0). `/speckit-implement` must end with a code-vs-diagram check. | ✅ | ✅ |
@@ -119,7 +119,6 @@ specs/001-sheets-import/
 │   ├── rest-api.md      # Phase 1: REST endpoints + JSON examples
 │   └── websocket.md     # Phase 1: WebSocket message types
 ├── checklists/requirements.md
-├── verification.md      # manual verification records (created during implement)
 └── tasks.md             # /speckit-tasks (not created here)
 ```
 
@@ -131,7 +130,8 @@ uv.lock
 .python-version                # uv python pin 3.11 (committed); .venv/ is gitignored
 .env.example                   # placeholders only
 README.md                      # run instructions + dependency/licence table
-diagrams/                      # *.puml + rendered *.png
+docs/verification.md           # manual M1–M10 records, test-first record, FR/SC traceability
+diagrams/                      # *.puml + rendered *.png + VERIFICATION.md (code-vs-diagram)
 src/quizbuzzer/
 ├── __init__.py
 ├── main.py                    # create_app(adapter, db_path); app; static mount; /teacher
