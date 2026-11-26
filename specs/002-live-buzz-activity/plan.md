@@ -166,18 +166,27 @@ src/quizbuzzer/
 tests/
 ├── conftest.py                  ~ settings.teacher_passcode; client = unlocked teacher; anon_client; student_client()
 ├── unit/
-│   ├── test_visibility.py       +
-│   ├── test_teacher_sessions.py +
-│   ├── test_config.py           + (or extend existing) blank passcode → ConfigError
-│   ├── test_participation_service.py +
-│   └── test_activity_phases.py  + open/end/cancel rules
+│   ├── test_config.py           + blank TEACHER_PASSCODE → ConfigError (T003)
+│   ├── test_teacher_sessions.py + (T004)
+│   ├── test_visibility.py       + student_view rules, no rank / foreign keys (T005)
+│   ├── test_db.py               ~ 002 schema constraints + cascades (T006)
+│   ├── test_activity_phases.py  + open / end / cancel rules, dashboard, displayed activity (T018, T033, T045)
+│   ├── test_participation_service.py + join / leave rules (T025)
+│   ├── test_ranking.py          + validation, check order, ranks, time never orders (T026)
+│   └── test_group_push.py       + group-only pushes (T040)
 └── integration/
-    ├── test_teacher_guard.py    + every /api/teacher/* route (001 + 002) → 401; /ws/teacher → 4401
-    ├── test_live_flow_api.py    + unlock → open → join → submit → end, dashboard snapshots
-    ├── test_ws_student.py       + snapshots, group-only pushes, reconnect, cancel
-    ├── test_visibility_leak.py  + SC-005
-    ├── test_submit_concurrency.py + SC-003, same-group race, submit vs end, open vs cancel
-    └── test_ws_teacher.py       ~ cookie required; dashboard.state; displayed CLOSED activity
+    ├── test_import_api.py       ~ log hygiene incl. passcode sentinel (T010); import after CLOSED (done)
+    ├── test_teacher_guard.py    + every /api/teacher/* route (001 + 002) → 401; /ws/teacher → 4401 (T007)
+    ├── test_ws_student.py       + snapshots, teammates, refresh / reconnect recovery (T008, T042)
+    ├── test_ws_teacher.py       ~ cookie required; dashboard.state; displayed CLOSED activity (T036)
+    ├── test_phase_concurrency.py + open vs open, open vs cancel, join vs cancel (T019, T046)
+    ├── test_live_flow_api.py    + open and cancel endpoints + pushes (T020, T047)
+    ├── test_submit_concurrency.py + SC-003, same-group race, submit vs end (T027, T034)
+    ├── test_student_api.py      + student REST contract (T028)
+    ├── test_dashboard_api.py    + dashboard, end, import after end (T035)
+    ├── test_visibility_leak.py  + SC-005 (T041)
+    ├── test_logs_002.py         + no passcode / names / answers in logs (T050)
+    └── test_push_latency.py     + SC-001 / SC-002 with 60 student sockets (T051)
 ```
 
 **Structure Decision**: The single src-layout project from 001 continues. The student page is
