@@ -168,3 +168,16 @@ Each core-rule test was written first, run, and **observed failing** before its 
 |---|---|---|---|---|
 | 1 · Setup: fake SheetsWriter | `unit/test_fake_sheets_adapter.py` (003 part, T003) | 6 failed (`write_cells`, `writes`, `make_read_only` missing), 11 passed (pre-existing) | 416 passed (full suite) | Setup commit |
 | 2 · Foundational: results model, CLOSED-only teacher refusal | `unit/test_results_service.py` (T005) | 1 collection error (`services.results_service` missing); after the module existed, 4 failures were test-setup bugs (missing `init_schema`, helper returned the pre-close activity), fixed in the test helper, not in the code under test | 427 passed (full suite) | Foundational commit |
+| 3 · US1 students see results after CLOSED | `unit/test_visibility.py` (003 part, T008), `integration/test_results_api.py` (student part, T009), `integration/test_visibility_leak.py` (CLOSED part, T010) | 10 failed (6 visibility: no `results` parameter; 3 results API + leak: `KeyError: 'results'`); **2 passed on first run** (`test_browser_without_membership_gets_no_results`, `test_no_results_key_while_open`: absence checks, vacuous before the feature), recorded as not red | 439 passed (full suite) | US1 commit |
+
+### 002 tests changed by 003 (spec change, not weakening)
+
+003 FR-002 deliberately reverses 002's "after CLOSED a student sees only its own group" (002
+FR-025 had deferred all-group results to 003). Two 002 assertions encoded the old rule:
+
+| Test | Old assertion | New assertion |
+|---|---|---|
+| `integration/test_visibility_leak.py` (end of test) | no other group's marker anywhere in the CLOSED snapshot | every other group's marker for every unit **is** in `results`; still no other group's names; entries have exactly `{rank, isWinner, groupNumber, answers}`; ranks 1..n; the `group` section still holds no other group's data |
+| `integration/test_dashboard_api.py::test_end_moves_students_to_closed_with_own_submissions_only` | `"other-2" not in repr(st1)` (whole state) | `"other-2" not in repr(st1["group"])` **and** `"other-2" in repr(st1["results"])` (and symmetrically for the other student) |
+
+Every pre-CLOSED leak assertion is unchanged.

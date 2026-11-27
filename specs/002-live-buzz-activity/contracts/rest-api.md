@@ -262,6 +262,11 @@ Rules (FR-015, FR-022 – FR-025):
 The object never has a key carrying `rank`, `isWinner`, another group's number, other groups'
 members, or any count of submissions beyond the student's own group's list.
 
+**Feature 003**: for a member of the latest CLOSED activity, the state also carries `results`
+(every group's answers and ranks, no names or times); see
+[003 contracts](../../003-results-export/contracts/rest-api.md#change-to-002-studentstate-gains-results-fr-002--fr-004).
+The rule above still holds in every situation before CLOSED.
+
 ### Activity
 
 As in 001, unchanged. `phase` can now be `OPEN` or `CLOSED`.

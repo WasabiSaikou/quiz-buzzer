@@ -48,6 +48,7 @@ from quizbuzzer.services.activity_service import (
     ReimportRefused,
     WarningsNotAcknowledged,
 )
+from quizbuzzer.services.results_service import ResultsService
 from quizbuzzer.services.sheets_adapter import (
     InvalidSheetUrl,
     SheetNotFound,
@@ -276,7 +277,10 @@ def create_app(
     # 003 research R1: a separate, write-scoped client used only by the export.
     app.state.writer = writer
     app.state.hub = RealtimeHub()
-    app.state.participation = ParticipationService(db_path, app.state.hub)
+    app.state.results = ResultsService(db_path)
+    app.state.participation = ParticipationService(
+        db_path, app.state.hub, results=app.state.results
+    )
     app.state.service = ActivityService(
         app.state.adapter,
         db_path,

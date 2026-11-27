@@ -182,11 +182,14 @@ class ParticipationService:
         db_path: str | Path,
         hub=None,
         teacher_publisher: Callable[[int], None] | None = None,
+        results=None,
     ) -> None:
         self.db_path = Path(db_path)
         self.hub = hub
         # ActivityService.publish_teacher_state, wired by create_app (plan › Diagram Blueprint).
         self.teacher_publisher = teacher_publisher
+        # 003: ResultsService; asked for results only once the activity is CLOSED (research R5).
+        self.results = results
 
     # --- read side ---------------------------------------------------------------------------
 
@@ -229,12 +232,15 @@ class ParticipationService:
                 return self._member_view(conn, activity, participant)
         return student_view(None, None, [], [])
 
-    @staticmethod
-    def _member_view(conn, activity, participant) -> dict[str, Any]:
+    def _member_view(self, conn, activity, participant) -> dict[str, Any]:
         # Only the recipient's own group's rows are read and passed on (Constitution III).
         members = db.list_group_members(conn, activity.id, participant.group_number)
         own = db.list_group_submissions(conn, activity.id, participant.group_number)
-        return student_view(activity, participant, members, own)
+        # 003 FR-002: other groups' rows are read only once the activity is CLOSED.
+        results = None
+        if activity.phase is Phase.CLOSED and self.results is not None:
+            results = self.results.results_for(activity)
+        return student_view(activity, participant, members, own, results=results)
 
     # --- join / change group (diagrams/002-seq-join.puml) ------------------------------------
 

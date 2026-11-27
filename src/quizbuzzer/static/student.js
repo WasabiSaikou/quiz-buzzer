@@ -110,6 +110,7 @@ function answerList(submission, kind) {
 function render(state) {
   ui.state = state;
   const { activity, membership, group } = state;
+  renderResults(state.results, membership); // 003: present only for members of a CLOSED activity
   if (!activity) return show("none");
   if (!membership) return renderJoin(activity);
   if (activity.phase === "DRAFT") return renderWaiting(membership, group);
@@ -188,6 +189,57 @@ function renderClosed(membership, group) {
   );
   $("closed-none").classList.toggle("hidden", group.submissions.length > 0);
   show("closed");
+}
+
+// --- Results (feature 003; present only once the activity is CLOSED) ---------------------
+
+function answerText(answers, kind) {
+  return answers.map((a) => (kind === "SINGLE" ? "" : `（${a.subPart}）`) + a.text).join("\n");
+}
+
+function renderResults(results, membership) {
+  const box = $("results");
+  if (!results) {
+    box.classList.add("hidden");
+    return;
+  }
+  const mine = membership?.groupNumber;
+  $("results-units").replaceChildren(
+    ...results.units.map((unit) => {
+      const title = el("h3", {}, `Question ${unit.number}` + (unit.kind === "GROUP_SET" ? " (題組)" : ""));
+      if (unit.submissions.length === 0) {
+        return el("div", { class: "unit" }, title, el("p", { class: "muted" }, "無人作答"));
+      }
+      const winner = unit.submissions[0];
+      const rows = unit.submissions.map((e) =>
+        el(
+          "tr",
+          { class: e.groupNumber === mine ? "mine" : "" },
+          el("td", {}, String(e.rank)),
+          el("td", {}, `Group ${e.groupNumber}`),
+          el("td", { class: "answer" }, answerText(e.answers, unit.kind)),
+        ),
+      );
+      return el(
+        "div",
+        { class: "unit" },
+        title,
+        el(
+          "div",
+          { class: "winner" },
+          el("strong", {}, `Winner: Group ${winner.groupNumber}`),
+          el("div", { class: "answer" }, answerText(winner.answers, unit.kind)),
+        ),
+        el(
+          "table",
+          { class: "order" },
+          el("thead", {}, el("tr", {}, el("th", {}, "Rank"), el("th", {}, "Group"), el("th", {}, "Answer"))),
+          el("tbody", {}, ...rows),
+        ),
+      );
+    }),
+  );
+  box.classList.remove("hidden");
 }
 
 // --- Actions -----------------------------------------------------------------------------

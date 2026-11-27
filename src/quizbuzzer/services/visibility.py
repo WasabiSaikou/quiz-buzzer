@@ -5,6 +5,11 @@ participant, its own group's members and its own group's submissions, and it emi
 contracts/rest-api.md › StudentState. It never emits rank, winner flags, counts, or another
 group's number, members or submissions, in any phase (FR-015, FR-022 – FR-025). As a second
 line of defence it drops any submission that is not the recipient's own group's.
+
+Feature 003 (FR-002, FR-003): the one exception is `results`, added only for a member of a
+CLOSED activity. The filter re-checks the phase, the membership and the results' activity
+itself, so results passed in by mistake before CLOSED are dropped, and it strips submitter
+names and receive times from every entry.
 """
 
 from __future__ import annotations
@@ -12,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from quizbuzzer.models import Activity, Participant, Phase, Submission
+from quizbuzzer.models import Activity, ActivityResults, Participant, Phase, Submission
 
 
 def _activity_summary(activity: Activity, *, with_units: bool) -> dict[str, Any]:
@@ -53,6 +58,8 @@ def student_view(
     participant: Participant | None,
     members: Sequence[str],
     own_submissions: Sequence[Submission],
+    *,
+    results: ActivityResults | None = None,
 ) -> dict[str, Any]:
     """StudentState for one recipient (contracts/rest-api.md › StudentState › Rules)."""
     if activity is None:
@@ -66,7 +73,7 @@ def student_view(
     own = [s for s in own_submissions if s.group_number == participant.group_number]
     if activity.phase is Phase.DRAFT:
         own = []
-    return {
+    view = {
         "activity": _activity_summary(activity, with_units=True),
         "membership": {
             "groupNumber": participant.group_number,
@@ -76,6 +83,37 @@ def student_view(
             "members": list(members),
             "submissions": [_submission_out(s) for s in sorted(own, key=_unit_order(activity))],
         },
+    }
+    if (
+        results is not None
+        and activity.phase is Phase.CLOSED
+        and results.activity_id == activity.id
+    ):
+        view["results"] = _student_results(results)
+    return view
+
+
+def _student_results(results: ActivityResults) -> dict[str, Any]:
+    """003 contracts › StudentState `results`: entries without submittedBy / receivedAt."""
+    return {
+        "units": [
+            {
+                "unitId": u.unit_id,
+                "number": u.number,
+                "kind": u.kind.value,
+                "subParts": list(u.sub_parts),
+                "submissions": [
+                    {
+                        "rank": e.rank,
+                        "isWinner": e.is_winner,
+                        "groupNumber": e.group_number,
+                        "answers": [{"subPart": k, "text": t} for k, t in e.answers],
+                    }
+                    for e in u.entries
+                ],
+            }
+            for u in results.units
+        ]
     }
 
 

@@ -118,7 +118,11 @@ def test_end_moves_students_to_closed_with_own_submissions_only(client, student_
     assert st1["activity"] == {"id": a["id"], "phase": "CLOSED", "groupCount": 6}
     assert [s["answers"][0]["text"] for s in st1["group"]["submissions"]] == ["mine-1"]
     assert [s["answers"][0]["text"] for s in st2["group"]["submissions"]] == ["other-2"]
-    assert "other-2" not in repr(st1) and "mine-1" not in repr(st2)
+    # The own-group section stays own-group only (002 FR-025). Feature 003 FR-002 then adds
+    # every group's answers in `results` once CLOSED, so the old whole-state check
+    # ("other-2" nowhere in st1) is now limited to `group`, and `results` must hold both.
+    assert "other-2" not in repr(st1["group"]) and "mine-1" not in repr(st2["group"])
+    assert "other-2" in repr(st1["results"]) and "mine-1" in repr(st2["results"])
     r = submit(s1, next(u for u in a["units"] if len(u["slots"]) == 2))
     assert r.status_code == 409 and r.json()["error"]["code"] == "activity_ended"
 

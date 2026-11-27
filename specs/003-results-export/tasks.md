@@ -91,23 +91,23 @@ implementation task it covers. Record the red run in `docs/verification.md` › 
 
 ### Tests for User Story 1 (write first, observe failing) ⚠️
 
-- [ ] T008 [P] [US1] Extend `tests/unit/test_visibility.py` (**CLOSED-only visibility**):
+- [X] T008 [P] [US1] Extend `tests/unit/test_visibility.py` (**CLOSED-only visibility**):
   - member + CLOSED + `results=` → `results` key present with every unit, entries `{rank, isWinner, groupNumber, answers}` only (no `submittedBy`, `receivedAt`), including other groups' entries;
   - member + DRAFT or OPEN with `results=` passed anyway → **no** `results` key and the output equals the 002 output without `results` (the filter's own phase re-check);
   - no membership / foreign membership + CLOSED + `results=` → no `results` key;
   - `results=None` + CLOSED → no `results` key (002 tests unchanged).
-- [ ] T009 [P] [US1] Write `tests/integration/test_results_api.py` › student part:
+- [X] T009 [P] [US1] Write `tests/integration/test_results_api.py` › student part:
   - groups 4, 1, 6 submit unit 2 in that order, nobody submits another unit; End; a member of group 3 that never submitted gets `GET /api/student/state` with `results` listing ranks 1–3 (groups 4, 1, 6) and an empty list for the unanswered unit;
   - a connected `/ws/student` socket receives the CLOSED `student.state` with `results` after End;
   - a browser with no membership gets no `results`;
   - while OPEN, a member's state has no `results` key.
-- [ ] T010 [P] [US1] Extend `tests/integration/test_visibility_leak.py`: over the full recorded traffic of one student, assert no other group's data and no `rank` appear in any message before the CLOSED snapshot, and that the CLOSED snapshot contains the complete results (SC-002).
+- [X] T010 [P] [US1] Extend `tests/integration/test_visibility_leak.py`: over the full recorded traffic of one student, assert no other group's data and no `rank` appear in any message before the CLOSED snapshot, and that the CLOSED snapshot contains the complete results (SC-002).
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Add the keyword-only `results` parameter to `student_view` in `src/quizbuzzer/services/visibility.py`: emit `results` only when the participant is a member of `activity` and `activity.phase is Phase.CLOSED`; strip `submittedBy` / `receivedAt`, which are teacher only (data-model.md › ResultEntry.submitted_by, ResultEntry.received_at; contracts › StudentState `results`). Make T008 pass.
-- [ ] T012 [US1] In `src/quizbuzzer/services/participation_service.py`, give `ParticipationService` a `results` collaborator (constructor keyword, default `None`) and make `_member_view` call `results.results_for(activity)` **only** when `activity.phase is Phase.CLOSED`, passing it to `student_view`. Wire `ResultsService` in `src/quizbuzzer/main.py` (`app.state.results`). Make T009 and T010 pass.
-- [ ] T013 [US1] Student UI in `src/quizbuzzer/static/student.html` and `student.js`: when `state.results` is present, render the results screen (per unit in order: winner group and answer, each 題組 slot labelled （k）; then the rank list group / answer / rank; 無人作答 for an empty unit). Escape all text (no `innerHTML` with answer text).
+- [X] T011 [US1] Add the keyword-only `results` parameter to `student_view` in `src/quizbuzzer/services/visibility.py`: emit `results` only when the participant is a member of `activity` and `activity.phase is Phase.CLOSED`; strip `submittedBy` / `receivedAt`, which are teacher only (data-model.md › ResultEntry.submitted_by, ResultEntry.received_at; contracts › StudentState `results`). Make T008 pass.
+- [X] T012 [US1] In `src/quizbuzzer/services/participation_service.py`, give `ParticipationService` a `results` collaborator (constructor keyword, default `None`) and make `_member_view` call `results.results_for(activity)` **only** when `activity.phase is Phase.CLOSED`, passing it to `student_view`. Wire `ResultsService` in `src/quizbuzzer/main.py` (`app.state.results`). Make T009 and T010 pass.
+- [X] T013 [US1] Student UI in `src/quizbuzzer/static/student.html` and `student.js`: when `state.results` is present, render the results screen (per unit in order: winner group and answer, each 題組 slot labelled （k）; then the rank list group / answer / rank; 無人作答 for an empty unit). Escape all text (no `innerHTML` with answer text).
 
 **Checkpoint**: full suite green; commit "feat(003): US1".
 

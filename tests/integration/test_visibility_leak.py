@@ -94,8 +94,25 @@ def test_one_student_never_learns_anything_about_other_groups(client, student_cl
             if key == "groupNumber":
                 assert path[-1:] == ("membership",) and value == 1, (path, value)
 
-        # After CLOSED the student still sees only its own group (results for all are 003).
+        # Feature 003 (FR-002, SC-002): only the CLOSED snapshot carries the full results,
+        # every other group's answers and ranks, but still no names or receive times (FR-003).
+        # (002's version asserted the opposite here; 003 FR-002 deliberately changes that rule.)
         assert client.post(f"/api/teacher/activities/{a['id']}/end").status_code == 200
         closed = next_of_type(ws, "student.state")
-    assert closed["state"]["activity"]["phase"] == "CLOSED"
-    assert "LEAK-g" not in json.dumps(closed, ensure_ascii=False)
+    state = closed["state"]
+    assert state["activity"]["phase"] == "CLOSED"
+    text = json.dumps(closed, ensure_ascii=False)
+    results = state["results"]["units"]
+    assert [u["number"] for u in results] == [u["number"] for u in a["units"]]
+    for unit in a["units"]:
+        for g in OTHER_GROUPS:
+            assert f"LEAK-g{g}-u{unit['number']}" in text, (g, unit["number"])
+    for g in OTHER_GROUPS:
+        assert f"name-g{g}" not in text, g
+    for unit in results:
+        assert [e["rank"] for e in unit["submissions"]] == list(range(1, len(unit["submissions"]) + 1))
+        for e in unit["submissions"]:
+            assert set(e) == {"rank", "isWinner", "groupNumber", "answers"}
+    # Nothing outside `results` changed shape: own group only, as in 002.
+    assert set(state) == {"activity", "membership", "group", "results"}
+    assert "LEAK-g" not in json.dumps(state["group"], ensure_ascii=False)

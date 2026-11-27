@@ -34,6 +34,11 @@
     .answers { margin: 0; padding-left: 0; list-style: none; }
     .members { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
     .members li { padding: 0 10px; border-radius: 12px; background: var(--soft); border: 1px solid var(--line); }
+    .winner { background: var(--okbg); border: 1px solid #4ac26b; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+    .order { width: 100%; border-collapse: collapse; }
+    .order th, .order td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .answer { white-space: pre-wrap; }
+    .mine { font-weight: 600; }
     .group-badge { font-size: 28px; font-weight: 700; }
     #conn { font-size: 13px; padding: 2px 10px; border-radius: 10px; background: var(--errbg); color: var(--err); }
   </style>
@@ -85,6 +90,11 @@
       <p>Group <span id="closed-group"></span>. Your group's answers:</p>
       <div id="closed-units" class="stack"></div>
       <p id="closed-none" class="muted hidden">Your group did not submit any answers.</p>
+    </section>
+
+    <section id="results" class="hidden">
+      <h2>Results（結果）</h2>
+      <div id="results-units" class="stack"></div>
     </section>
   </main>
   <script src="/static/student.js"></script>

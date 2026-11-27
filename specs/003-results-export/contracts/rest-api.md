@@ -118,5 +118,8 @@ row of 002's rules table:
 }
 ```
 
-Student entries never carry `submittedBy` or `receivedAt` (FR-003). Before CLOSED, 002's rule
+Student entries never carry `submittedBy` or `receivedAt` (FR-003). `student_view` adds `results` only when
+all three hold, checked inside the filter itself: the activity is CLOSED, the participant is a
+member of that activity, and the results were built for that same activity (`activityId`
+match; recorded during implementation, 2026-11-27, as an extra guard). Before CLOSED, 002's rule
 still holds: no key carries `rank`, `isWinner`, another group's number or data.

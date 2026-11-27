@@ -164,3 +164,73 @@ def test_view_is_json_serialisable_plain_data():
 
     view = student_view(make_activity(Phase.OPEN), make_participant(), ["小明"], [make_submission()])
     assert json.loads(json.dumps(view, ensure_ascii=False)) == view
+
+
+# --- Feature 003: results only for members of a CLOSED activity (T008; 003 FR-002, FR-003) ---
+
+from quizbuzzer.services.results_service import build_results  # noqa: E402
+
+STUDENT_ENTRY_KEYS = {"rank", "isWinner", "groupNumber", "answers"}
+
+
+def all_groups_results(activity):
+    """Results holding another group's submission (group 5, rank 1) and our own (group 3)."""
+    foreign = make_submission(group=5, rank=1, sid=1, by="LEAK-name")
+    own = make_submission(group=3, rank=2, sid=2, by="阿美")
+    return build_results(activity, [own, foreign])
+
+
+def test_closed_member_gets_full_results_without_names_or_times():
+    activity = make_activity(Phase.CLOSED)
+    view = student_view(activity, make_participant(group=3), ["小明"], [], results=all_groups_results(activity))
+    units = view["results"]["units"]
+    assert [u["number"] for u in units] == [3, 4]  # sheet order
+    group_set, single = units
+    assert group_set["kind"] == "GROUP_SET" and group_set["subParts"] == [1, 2]
+    assert [(e["rank"], e["groupNumber"], e["isWinner"]) for e in group_set["submissions"]] == [
+        (1, 5, True),
+        (2, 3, False),
+    ]
+    for e in group_set["submissions"]:
+        assert set(e) == STUDENT_ENTRY_KEYS
+        assert e["answers"] == [{"subPart": 1, "text": "光合作用"}, {"subPart": 2, "text": "葉綠體"}]
+    assert single["submissions"] == []  # 無人作答
+    assert "LEAK-name" not in repr(view)
+    assert "2026-11-27T02:14:09.512Z" not in repr(view["results"])
+
+
+@pytest.mark.parametrize("phase", [Phase.DRAFT, Phase.OPEN])
+def test_results_are_dropped_before_closed_even_if_passed_in(phase):
+    """The filter re-checks the phase itself (defence in depth, Constitution III)."""
+    activity = make_activity(phase)
+    leaked = all_groups_results(make_activity(Phase.CLOSED))
+    with_results = student_view(activity, make_participant(), ["小明"], [make_submission()], results=leaked)
+    without = student_view(activity, make_participant(), ["小明"], [make_submission()])
+    assert with_results == without
+    assert "results" not in with_results
+    assert_no_forbidden_keys(with_results)
+
+
+def test_closed_without_membership_gets_no_results():
+    activity = make_activity(Phase.CLOSED)
+    view = student_view(activity, None, [], [], results=all_groups_results(activity))
+    assert "results" not in view
+
+
+def test_closed_with_membership_of_another_activity_gets_no_results():
+    activity = make_activity(Phase.CLOSED, activity_id=8)
+    view = student_view(activity, make_participant(activity_id=7), ["小明"], [],
+                        results=all_groups_results(activity))
+    assert "results" not in view
+
+
+def test_closed_with_results_none_is_unchanged_from_002():
+    view = student_view(make_activity(Phase.CLOSED), make_participant(), ["小明"], [make_submission()])
+    assert "results" not in view
+
+
+def test_results_of_another_activity_are_not_shown():
+    activity = make_activity(Phase.CLOSED, activity_id=7)
+    other = all_groups_results(make_activity(Phase.CLOSED, activity_id=8))
+    view = student_view(activity, make_participant(), ["小明"], [], results=other)
+    assert "results" not in view
