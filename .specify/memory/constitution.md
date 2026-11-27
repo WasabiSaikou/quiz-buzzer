@@ -76,7 +76,7 @@ proven, not asserted.
 ### VII. Spec-Code-Diagram Consistency and Simplicity
 
 - Code, spec, plan, tasks, and diagrams MUST agree. A change to any one MUST update the others in
-  the same pull request.
+  the same commit.
 - The simplest design that satisfies the spec MUST be preferred; features outside the spec MUST NOT
   be added.
 - Every third-party dependency MUST be listed in the README with its license.
@@ -119,12 +119,12 @@ java -jar tools/plantuml.jar "./diagrams/*.puml"
   (ending with a code-vs-diagram verification step).
 - **Constitution Check**: every plan MUST pass a gate against Principles I–VIII; any deviation MUST
   be recorded with justification in the plan's complexity tracking.
-- **Test gate**: a pull request touching winner selection, phase transitions, visibility rules,
+- **Test gate**: a change touching winner selection, phase transitions, visibility rules,
   Sheets parsing, or Sheets export MUST include the failing-first tests and pass them in CI or a
   recorded local run.
 - **Parser gate**: parser/exporter changes MUST show passing results against ≥ 3 differently shaped
   sheets (Principle II).
-- **Consistency gate**: a pull request MUST update spec, plan, tasks, diagrams (.puml and PNG), and
+- **Consistency gate**: a change MUST update spec, plan, tasks, diagrams (.puml and PNG), and
   README dependency list together when any of them is affected (Principle VII).
 - **Secrets gate**: reviewers MUST confirm no secrets or personal data appear in the diff.
 
@@ -133,7 +133,7 @@ java -jar tools/plantuml.jar "./diagrams/*.puml"
 - This constitution overrides all other project practices and guidance. Where a conflict exists,
   the constitution wins.
 - Amendments require the agreement of both SpecKit members, a written rationale, and a version bump
-  in the same pull request.
+  in the same commit.
 - Versioning follows semantic versioning:
   - MAJOR: removal or backward-incompatible redefinition of a principle or governance rule.
   - MINOR: a new principle or section, or materially expanded guidance.
@@ -148,4 +148,8 @@ principles and records compliance or deviations) and allows that review to happe
 MINOR, not PATCH: the meaning changes (review timing and scope). Not MAJOR: a change reviewed
 under 1.0.0 also satisfies 1.1.0.
 
-**Version**: 1.1.0 | **Ratified**: 2026-11-26 | **Last Amended**: 2026-11-27
+**Amendment 1.1.1 (2026-11-27)**: Principle VII, the Test and Consistency gates and the
+Amendments rule say "commit" or "change" instead of "pull request". Rationale: PATCH clarification
+of 1.1.0; the team does not use pull requests, and the rules are otherwise unchanged.
+
+**Version**: 1.1.1 | **Ratified**: 2026-11-26 | **Last Amended**: 2026-11-27
