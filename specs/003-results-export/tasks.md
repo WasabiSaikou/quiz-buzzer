@@ -188,7 +188,7 @@ implementation task it covers. Record the red run in `docs/verification.md` › 
 - [X] T036 Run `uv run pytest` and record the result (count, duration, commit) in `docs/verification.md` › Automated test runs (003). Confirm every test-first row has its red entry and its green commit.
 - [X] T037 Code-vs-diagram verification (Principle VIII): compare `src/quizbuzzer/` with `diagrams/system-component.puml`, `domain-class.puml` and every `003-seq-*.puml` (names, calls, routes, status codes) using the plan's Diagram Blueprint. Record a "Feature 003" section in `diagrams/VERIFICATION.md` in the same table format as 001/002. Fix diagrams (or code, when the code breaks the spec), re-render with `java -jar tools/plantuml.jar "./diagrams/*.puml"` (exit 0, a PNG next to every `.puml`), and update `plan.md` › Diagram changes if anything changed.
 - [X] T038 Final consistency pass (Principle VII): `spec.md`, `plan.md`, `contracts/rest-api.md`, `data-model.md`, `quickstart.md` match the shipped behaviour; mark finished tasks done in this file.
-- [ ] T039 *(Not in the unattended run.)* `README.md`: add the 003 features (results, export needs Editor access, CSV) to the run instructions. Dependency table unchanged (research R10).
+- [X] T039 **(Done 2026-11-27: one README covers 001, 002 and 003; licences read from installed package metadata.)** `README.md`: add the 003 features (results, export needs Editor access, CSV) to the run instructions. Dependency table unchanged (research R10).
 - [ ] T040 *(Human tester; the AI does not mark this done.)* Manual verification M31–M42 from `quickstart.md` §4 on real devices and a real sheet, recorded in `docs/verification.md` › 003 (Principle V).
 
 ---

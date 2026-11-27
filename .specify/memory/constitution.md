@@ -138,7 +138,14 @@ java -jar tools/plantuml.jar "./diagrams/*.puml"
   - MAJOR: removal or backward-incompatible redefinition of a principle or governance rule.
   - MINOR: a new principle or section, or materially expanded guidance.
   - PATCH: clarifications, wording, and typo fixes with no semantic change.
-- Every pull request MUST be reviewed by the other SpecKit member against these principles before
-  merge; the review MUST explicitly note compliance or justified deviations.
+- Every change MUST be reviewed by the other SpecKit member against these principles before or
+  after commit; the review MUST explicitly note compliance or justified deviations.
 
-**Version**: 1.0.0 | **Ratified**: 2026-11-26 | **Last Amended**: 2026-11-26
+**Amendment 1.1.0 (2026-11-27)**: the review rule no longer refers to pull requests, because the
+team commits directly and does not use them. Rationale: the rule as written could never be met.
+The new wording keeps the substance (the other member reviews every change against these
+principles and records compliance or deviations) and allows that review to happen after commit.
+MINOR, not PATCH: the meaning changes (review timing and scope). Not MAJOR: a change reviewed
+under 1.0.0 also satisfies 1.1.0.
+
+**Version**: 1.1.0 | **Ratified**: 2026-11-26 | **Last Amended**: 2026-11-27

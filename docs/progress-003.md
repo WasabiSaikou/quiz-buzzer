@@ -117,3 +117,5 @@ in `docs/verification.md` › 003 › Manual verification.
 
 Also still open: **T039**, the README section for 003 (results, export needs Editor access, CSV).
 The dependency table does not change.
+
+**Update (2026-11-27, after the run)**: T039 (README) is done, and the constitution was amended to 1.1.0 (review rule no longer refers to pull requests). Only T040 (manual checks) remains.
