@@ -53,6 +53,7 @@
     .dash-unit h3 { margin: 0 0 6px; font-size: 15px; }
     .groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin: 0 0 16px; }
     .answer { white-space: pre-wrap; }
+    a.button { padding: 7px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); color: inherit; text-decoration: none; }
     ul.problems { margin: 6px 0 0; padding-left: 18px; }
     .groups div { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
   </style>
@@ -156,6 +157,7 @@
       <div id="results-message" class="banner hidden" role="alert"></div>
       <div class="actions">
         <button type="button" id="export-button" class="primary">Export to sheet</button>
+        <a id="csv-link" class="button" href="#" download>Download CSV</a>
       </div>
       <div id="export-report" class="banner hidden" role="status"></div>
       <div id="results-units"></div>

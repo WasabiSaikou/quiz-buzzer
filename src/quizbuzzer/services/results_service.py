@@ -7,6 +7,7 @@ asks `results_for` only after checking CLOSED, and the visibility filter re-chec
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -123,3 +124,23 @@ class ResultsService:
             return build_results(activity, db.list_dashboard_submissions(conn, activity.id))
         finally:
             conn.close()
+
+    # --- CSV (US3; diagrams/003-seq-download-csv.puml) ----------------------------------------
+
+    def results_csv(self, activity_id: int) -> tuple[bytes, tuple[str, str]]:
+        """(CSV bytes, (ascii filename, utf-8 filename)); CLOSED only (PhaseConflict 'csv')."""
+        from quizbuzzer.services.csv_export import to_csv
+
+        results = self.teacher_results(activity_id, action="csv")
+        return to_csv(results), csv_filename(activity_id, results.title)
+
+
+_UNSAFE = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]')
+MAX_TITLE_IN_FILENAME = 60
+
+
+def csv_filename(activity_id: int, title: str) -> tuple[str, str]:
+    """FR-019 / research R6: an ASCII fallback and a UTF-8 name safe on Windows and macOS."""
+    safe = _UNSAFE.sub("_", title).strip().strip(".")[:MAX_TITLE_IN_FILENAME].strip()
+    utf8 = f"activity-{activity_id}-{safe}.csv" if safe else f"activity-{activity_id}.csv"
+    return f"activity-{activity_id}.csv", utf8

@@ -148,14 +148,14 @@ implementation task it covers. Record the red run in `docs/verification.md` › 
 
 ### Tests for User Story 3 (write first, observe failing) ⚠️
 
-- [ ] T025 [P] [US3] Write `tests/unit/test_csv_export.py` (**CSV quoting / BOM / formula prefix**): output starts with the UTF-8 BOM bytes `EF BB BF`; header row exact; CRLF line endings; one row per answer slot ordered unit → rank → sub-part; `sub_part` empty for SINGLE; `is_winner` `true`/`false`; `submitted_at` `…+00:00`; answers with `,`, `"`, `\n`, `\r\n` round-trip through `csv.reader` as one field each; each of `=`, `+`, `-`, `@` as the first character gets a leading `'` (and a `-` later in the text does not); Chinese text survives `decode("utf-8-sig")`; zero submissions → header only.
-- [ ] T026 [P] [US3] Write `tests/integration/test_csv_api.py`: CLOSED → 200, `text/csv; charset=utf-8`, `Content-Disposition` with `attachment`, `filename="activity-<id>.csv"` and a `filename*=UTF-8''…` whose decoded name has no `\ / : * ? " < > |`; body equals `to_csv` of the results; DRAFT / OPEN → 409 `phase_conflict`; unknown → 404.
+- [X] T025 [P] [US3] Write `tests/unit/test_csv_export.py` (**CSV quoting / BOM / formula prefix**): output starts with the UTF-8 BOM bytes `EF BB BF`; header row exact; CRLF line endings; one row per answer slot ordered unit → rank → sub-part; `sub_part` empty for SINGLE; `is_winner` `true`/`false`; `submitted_at` `…+00:00`; answers with `,`, `"`, `\n`, `\r\n` round-trip through `csv.reader` as one field each; each of `=`, `+`, `-`, `@` as the first character gets a leading `'` (and a `-` later in the text does not); Chinese text survives `decode("utf-8-sig")`; zero submissions → header only.
+- [X] T026 [P] [US3] Write `tests/integration/test_csv_api.py`: CLOSED → 200, `text/csv; charset=utf-8`, `Content-Disposition` with `attachment`, `filename="activity-<id>.csv"` and a `filename*=UTF-8''…` whose decoded name has no `\ / : * ? " < > |`; body equals `to_csv` of the results; DRAFT / OPEN → 409 `phase_conflict`; unknown → 404.
 
 ### Implementation for User Story 3
 
-- [ ] T027 [US3] Create `src/quizbuzzer/services/csv_export.py: to_csv(results)` (research R6). Make T025 pass.
-- [ ] T028 [US3] Add `ResultsService.results_csv(activity_id) -> (bytes, filename)` and `csv_filename(activity_id, title)` in `src/quizbuzzer/services/results_service.py`, and `GET /activities/{id}/results.csv` in `src/quizbuzzer/api/teacher_routes.py`. Make T026 pass.
-- [ ] T029 [US3] Teacher UI: a "Download CSV" link in the results panel in `src/quizbuzzer/static/teacher.js`.
+- [X] T027 [US3] Create `src/quizbuzzer/services/csv_export.py: to_csv(results)` (research R6). Make T025 pass.
+- [X] T028 [US3] Add `ResultsService.results_csv(activity_id) -> (bytes, (ascii filename, utf-8 filename))` and `csv_filename(activity_id, title)` in `src/quizbuzzer/services/results_service.py`, and `GET /activities/{id}/results.csv` in `src/quizbuzzer/api/teacher_routes.py`. Make T026 pass.
+- [X] T029 [US3] Teacher UI: a "Download CSV" link in the results panel in `src/quizbuzzer/static/teacher.js`.
 
 **Checkpoint**: full suite green; commit "feat(003): US3".
 

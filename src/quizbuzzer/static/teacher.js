@@ -368,6 +368,7 @@ function showResults(results) {
   $("results-section").classList.toggle("hidden", !results);
   if (!results) return;
   $("results-title").textContent = `Results — ${results.title}`;
+  $("csv-link").href = `/api/teacher/activities/${results.activityId}/results.csv`; // 003 US3
   $("results-units").replaceChildren(
     ...results.units.map((u) => {
       const head = el("h3", {}, `Question ${u.number}`, " ", kindLabel(u.kind));

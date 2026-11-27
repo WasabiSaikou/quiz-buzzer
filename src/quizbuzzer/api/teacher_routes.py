@@ -8,6 +8,7 @@ client and sqlite3 (research R8). Every route here is behind 002's TeacherGuardM
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Request, Response
 
@@ -94,6 +95,18 @@ def get_dashboard(activity_id: int, request: Request) -> dict[str, Any]:
 def get_results(activity_id: int, request: Request) -> dict[str, Any]:
     """003 FR-001, FR-005 (contracts/rest-api.md: TeacherResults); CLOSED only."""
     return results_out(request.app.state.results.teacher_results(activity_id))
+
+
+@router.get("/activities/{activity_id}/results.csv")
+def results_csv(activity_id: int, request: Request) -> Response:
+    """003 FR-015 - FR-019 (diagrams/003-seq-download-csv.puml)."""
+    data, (ascii_name, utf8_name) = request.app.state.results.results_csv(activity_id)
+    disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(utf8_name, safe='')}"
+    return Response(
+        content=data,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": disposition},
+    )
 
 
 @router.post("/activities/{activity_id}/export")
