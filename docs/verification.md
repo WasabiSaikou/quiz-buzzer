@@ -172,6 +172,7 @@ Each core-rule test was written first, run, and **observed failing** before its 
 | 4 · US2 teacher results + export to sheet | `unit/test_sheet_exporter.py` (format_cell; plan_export re-location on 3 shapes × unchanged / 2 rows above / blank row between / column inserted; abort path; SheetExporter nothing-written paths, T014–T017), `unit/test_google_sheets_writer.py` (T018), `integration/test_export_api.py` (T019), `integration/test_results_api.py` (teacher part, T020) | 2 collection errors (`sheet_exporter`, `google_sheets_writer` missing) + 16 failed integration tests (routes missing). After the modules existed, 3 failures were a wrong test assertion (a set intersection between moved and stored addresses collides when a 2-row shift lands on another slot's old cell); replaced by the intended per-slot check, the exact-address assertion was unchanged | 519 passed (full suite) | US2 commit |
 | 5 · US3 CSV download | `unit/test_csv_export.py` (BOM, header, CRLF, order, quoting, formula prefix, Chinese, empty; T025), `integration/test_csv_api.py` (T026) | 2 collection errors (`services.csv_export` missing); then 1 genuine failure in the new code (the backslash was missing from the unsafe-filename character class), fixed in `results_service.csv_filename` | 544 passed (full suite) | US3 commit |
 | 6 · US4 past CLOSED activities | `unit/test_results_service.py` (`list_closed`, T030), `integration/test_past_activities_api.py` (incl. 003 routes in the guarded set, T031) | 5 failed (`list_closed` missing, `/activities/closed` route missing) | 549 passed (full suite) | US4 commit |
+| 7 · Polish: log hygiene, CLOSED push latency | `integration/test_logs_003.py` (T034), `integration/test_push_latency.py` (CLOSED part, T035) | **not red**: both passed on first run (they verify existing behaviour; not Principle V core rules) | 550 passed | Polish commit |
 
 ### 002 tests changed by 003 (spec change, not weakening)
 
@@ -184,3 +185,13 @@ FR-025 had deferred all-group results to 003). Two 002 assertions encoded the ol
 | `integration/test_dashboard_api.py::test_end_moves_students_to_closed_with_own_submissions_only` | `"other-2" not in repr(st1)` (whole state) | `"other-2" not in repr(st1["group"])` **and** `"other-2" in repr(st1["results"])` (and symmetrically for the other student) |
 
 Every pre-CLOSED leak assertion is unchanged.
+
+## Automated test runs (003)
+
+| Date | Commit | Result | Notes |
+|---|---|---|---|
+| 2026-11-27 | `3d84633` + Polish | **550 passed**, 0 skipped, ~77 s | Baseline 410 → 550 (+140). Includes re-location on 3 sheet shapes × 4 layouts, every nothing-written path, CSV rules, the extended leak test. Push latency at 60 student + 2 teacher sockets: OPEN 0.047 s, submission 0.031 s, CLOSED with full results 0.265 s (SC-001 target < 1 s) |
+
+## Manual verification (M31–M42)
+
+Not run yet: to be done by a human tester with real devices and a real sheet ([quickstart.md §4](../specs/003-results-export/quickstart.md)), tasks.md T040.

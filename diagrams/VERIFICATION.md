@@ -220,3 +220,93 @@ Re-rendered with `java -jar tools/plantuml.jar "./diagrams/*.puml"` (exit 0, 12/
 
 Not discrepancies: `/student` and the `/` redirect have no sequence diagram (research R8); the
 teacher and student pages are covered by the component diagram and the manual checks M11–M25.
+
+---
+
+# Code-vs-Diagram Verification — Feature 003 (Principle VIII)
+
+**Date**: 2026-11-27 · **Scope**: `src/quizbuzzer/` after `/speckit-implement` for 003 (T001–T038;
+README T039 and the manual checks T040 left to a human) · **Diagrams**: `system-component`,
+`domain-class`, `003-seq-view-results`, `003-seq-export-sheet`, `003-seq-download-csv`,
+`003-seq-past-activities` · **Method**: every element, name, call, route and status code below
+was checked by reading the code against the `.puml` source.
+
+**Result**: consistent after 4 diagram corrections (E8–E11) plus the implementation-time change
+recorded in plan.md (`load`, US2). In every case the code follows the spec and contracts, so the
+diagrams were updated. Re-rendered with `java -jar tools/plantuml.jar "./diagrams/*.puml"`
+(exit 0, 16/16 PNGs fresh); `003-seq-view-results` and `003-seq-export-sheet` inspected visually.
+
+## system-component.puml
+
+| Diagram element | Code | Status |
+|---|---|---|
+| Teacher UI (… results, export, CSV, past activities) | `teacher.js`: `showResults`, export button with `confirm()`, `csv-link`, `loadPast` | ✅ |
+| Student UI (… results when CLOSED) | `student.js`: `renderResults` (winner, rank table, 無人作答) | ✅ |
+| Visibility filter `student_view(…, results: CLOSED only)` | `student_view(..., *, results=None)`; adds `results` only for a member of the same CLOSED activity | ✅ |
+| Results service `ResultsService (results, past list, CSV)` | `teacher_results`, `load`, `results_for`, `list_closed`, `results_csv`; pure `build_results`, `results_out`, `csv_filename` | ✅ |
+| Sheet exporter `SheetExporter (re-read, re-locate, write)` | `SheetExporter.export`, pure `plan_export`, `format_cell`, `ExportBlocked`, `ExportNotShared` | ✅ |
+| CSV writer `to_csv(results) -> bytes` | `csv_export.to_csv` (pure) | ✅ |
+| TR → RES, TR → EXP | `get_results`, `closed_activities`, `results_csv` → `app.state.results`; `export_to_sheet` → `app.state.exporter` | ✅ |
+| PART → RES `results_for(activity)` only when CLOSED | `ParticipationService._member_view` | ✅ |
+| RES → DB read only; RES → CSVW | no write in `results_service.py`; `results_csv` calls `to_csv` | ✅ |
+| EXP → RES "teacher results (winners)" | `self.results_service.load(activity_id, action="export")` | ⚠ → diagram updated (E8) |
+| EXP → SAI `read_tab` (read-only); EXP → SWI `write_cells(spreadsheet_id, sheet_id, tab_title, cells)`; EXP → PARSER `parse` | `adapter.read_tab`, `writer.write_cells(tab.spreadsheet_id, tab.sheet_id, tab.title, cells)`, `guided_notes_parser.parse` | ✅ |
+| `SheetsWriter`; `GoogleSheetsWriter` (own credentials, write scope); one `values.batchUpdate` RAW | `sheets_adapter.SheetsWriter`; `google_sheets_writer.py` (`WRITE_SCOPE`, one `batchUpdate`, `valueInputOption: RAW`) | ✅ |
+| GSAD → GSA `spreadsheets.readonly` scope | `READONLY_SCOPE` unchanged; `GoogleSheetsAdapter` has no write method (tested) | ✅ |
+| Notes: stored addresses never written, ranges from current title; CSV rules; lazy wrappers; guard covers 003 routes | `plan_export` uses parsed `a1_ref`; `LazyGoogleSheetsWriter`; guard test lists 003 routes | ✅ |
+
+## domain-class.puml
+
+| Diagram element | Code (`models.py`) | Status |
+|---|---|---|
+| `ActivityResults {activityId, title, units}` | also `phase`, `group_count` | ⚠ → diagram updated (E9) |
+| `UnitResult {number, kind, entries, winner(), noAnswer()}` | also `unit_id`, `sub_parts`; `winner` / `no_answer` properties | ⚠ → diagram updated (E9) |
+| `ResultEntry {…, isWinner : bool, submitterName}` | `is_winner` property, field `submitted_by` | ⚠ → diagram updated (E9) |
+| `StudentResults <<view>>` projected by `student_view()` | `visibility._student_results` | ✅ |
+| `PastActivitySummary`, `CellWrite {a1Ref, text}`, `ExportReport {cellsWritten, unitsWritten, unitsSkipped}`, `ExportProblem {kind, questionNumber, subPart, code, message}` | same fields | ✅ |
+| Notes: stored `AnswerSlot` cell never written by 003; `Submission` read only, ranks to students only when CLOSED | `plan_export`; `student_view` | ✅ |
+
+## 003-seq-view-results.puml
+
+| Step | Code | Status |
+|---|---|---|
+| `publish_student_states()` after End; results built once, before the socket loop | built in `_member_view` per StudentKey (cached per key in `_send`) | ⚠ → diagram updated (E10) |
+| filter alt: member of CLOSED → results without names / times; no membership → none | `student_view` | ✅ |
+| Reconnect `API -> PSVC : state_for(cookie)` | `state_for_token` | ⚠ → diagram updated (E10) |
+| Teacher: `teacher_results` → 404 / 409 `phase_conflict` / 200 | `get_results` + error mappings | ✅ |
+
+## 003-seq-export-sheet.puml
+
+| Step | Code | Status |
+|---|---|---|
+| `POST …/export`, guard, `export(activity_id)` | `export_to_sheet` | ✅ |
+| `load(...)`: 404 `not_found`, 409 `phase_conflict` | `ResultsService.load` | ✅ (plan.md US2 change) |
+| zero winners → report 0, no Google call | early return in `export` | ✅ |
+| `read_tab`: not shared → 403 `export_not_shared`; gone → 404 `not_found`; down → 502 `sheets_unavailable` | `export` + error mappings | ✅ |
+| `parse` → `plan_export`; problems → 409 `export_blocked`, nothing written | `plan_export` raises before `write_cells` | ✅ |
+| `write_cells(..., current tab title, cells)` → one `batchUpdate` RAW; 403 → 403 `sheet_read_only`; success → 200 report | `GoogleSheetsWriter._execute`; `export_to_sheet` | ✅ |
+
+## 003-seq-download-csv.puml
+
+| Step | Code | Status |
+|---|---|---|
+| `GET …/results.csv`, guard, `results_csv`; 404 / 409 | route + `ResultsService.results_csv` (`action="csv"`) | ✅ |
+| `to_csv`: BOM + header, `sub_part` empty for single, `is_winner`, ISO 8601 offset, `'` prefix, quoting | `csv_export.to_csv` | ✅ |
+| 200 `text/csv; charset=utf-8`, attachment, safe file name | `Content-Disposition` with `filename` + `filename*` | ✅ |
+
+## 003-seq-past-activities.puml
+
+| Step | Code | Status |
+|---|---|---|
+| `GET /api/teacher/activities/closed` before `{activity_id}` | route order in `teacher_routes.py` | ✅ |
+| `list_closed()` → `ORDER BY createdAt DESC, id DESC` | `db.list_closed_activities`: `ORDER BY a.id DESC` (research R7) | ⚠ → diagram updated (E11) |
+| open one → results flow | `loadPast` → `loadResults` | ✅ |
+
+## Discrepancies and resolutions (003)
+
+| # | Diagram | Was | Now (matches code and spec) |
+|---|---|---|---|
+| E8 | system-component | EXP → RES "teacher results (winners)" | `load(activity_id, "export")` (activity + results) |
+| E9 | domain-class | result types missing `phase`, `groupCount`, `unitId`, `subParts`; `submitterName`; `isWinner` field | fields as in `models.py`; `submittedBy`; `isWinner()` derived |
+| E10 | 003-seq-view-results | results built once before the loop; `state_for(cookie)` | built per member key inside the loop; `state_for_token(cookie)` |
+| E11 | 003-seq-past-activities | `ORDER BY createdAt DESC, id DESC` | `ORDER BY id DESC (ids only grow)` |

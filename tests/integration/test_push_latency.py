@@ -56,3 +56,34 @@ def test_phase_change_and_submission_reach_everyone_within_one_second(app, clien
         submit_seconds = time.monotonic() - started
         print(f"submission reached 2 teacher + 5 group sockets in {submit_seconds:.3f} s")
         assert submit_seconds < 1.0, f"submission reached teachers + group in {submit_seconds:.3f} s"
+
+        # 003 SC-001 (T035): the CLOSED snapshot now carries the full results for every member.
+        for g in range(1, GROUPS + 1):
+            for u in a["units"]:
+                answers = [{"subPart": sl["subPart"], "text": f"g{g}"} for sl in u["slots"]]
+                if g == 7 and u["id"] == unit["id"]:
+                    continue  # already submitted above
+                r = submitter.post("/api/student/submissions", headers=cookie(tokens[(g, 0)]),
+                                   json={"unitId": u["id"], "answers": answers})
+                assert r.status_code == 201, r.text
+        for ws in teachers:  # drain the submission pushes
+            while True:
+                try:
+                    recv(ws, timeout=0.2)
+                except AssertionError:
+                    break
+        for ws in students.values():
+            while True:
+                try:
+                    recv(ws, timeout=0.05)
+                except AssertionError:
+                    break
+        started = time.monotonic()
+        assert client.post(f"/api/teacher/activities/{a['id']}/end").status_code == 200
+        for ws in students.values():
+            state = next_of_type(ws, "student.state")["state"]
+            assert state["activity"]["phase"] == "CLOSED"
+            assert len(state["results"]["units"]) == len(a["units"])
+        close_seconds = time.monotonic() - started
+        print(f"CLOSED with results reached 60 student sockets in {close_seconds:.3f} s")
+        assert close_seconds < 1.0, f"CLOSED with results reached all students in {close_seconds:.3f} s"

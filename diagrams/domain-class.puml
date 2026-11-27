@@ -207,11 +207,15 @@ package "Transient results / export types (003, not stored)" <<Rectangle>> {
   class ActivityResults {
     activityId : int
     title : str
-    units : UnitResult[]
+    phase : Phase
+    groupCount : int
+    units : UnitResult[] {sheet order}
   }
   class UnitResult {
+    unitId : int
     number : int
     kind : UnitKind
+    subParts : int[]
     entries : ResultEntry[] {rank order}
     winner() : ResultEntry | None
     noAnswer() : bool {無人作答}
@@ -219,9 +223,9 @@ package "Transient results / export types (003, not stored)" <<Rectangle>> {
   class ResultEntry {
     rank : int
     groupNumber : int
-    isWinner : bool
+    isWinner() : bool {rank = 1}
     answers : (subPart, text)[]
-    submitterName : str {teacher only}
+    submittedBy : str {teacher only}
     receivedAt : str {teacher only}
   }
   class StudentResults <<view>> {

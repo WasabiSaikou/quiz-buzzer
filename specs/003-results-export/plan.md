@@ -61,6 +61,10 @@ The diagrams are the primary blueprint, and module and class names match them ex
 **Diagram changes made during implementation** (re-rendered, exit 0):
 - US2: `003-seq-export-sheet`: `EXP -> RES` is `load(activity_id, action="export")`, which returns
   the activity (units and slots) with its results; was `teacher_results(activity_id)`.
+- Code-vs-diagram verification (T037, `diagrams/VERIFICATION.md` › Feature 003): E8
+  `system-component` EXP → RES is `load`; E9 `domain-class` result-type fields; E10
+  `003-seq-view-results` results built per member key inside the publish loop,
+  `state_for_token`; E11 `003-seq-past-activities` `ORDER BY id DESC`. Re-rendered, exit 0, 16/16.
 
 ## Technical Context
 

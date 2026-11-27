@@ -76,7 +76,7 @@ PART --> VIS : every student-bound\nresponse and push
 PART --> RES : results_for(activity)\nonly when phase = CLOSED (003)
 RES --> DB : read units, slots,\nsubmissions (read only)
 RES --> CSVW : to_csv(teacher results)
-EXP --> RES : teacher results (winners)
+EXP --> RES : load(activity_id, "export")\n(activity + results)
 EXP --> SAI : read_tab(spreadsheet_id, sheet_id)\n(re-read, read-only scope)
 EXP --> SWI : write_cells(spreadsheet_id, sheet_id,\ntab_title, cells)
 EXP --> PARSER : parse(grid, merges)\n(same detection as import)
