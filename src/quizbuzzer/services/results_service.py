@@ -101,6 +101,10 @@ class ResultsService:
 
     def teacher_results(self, activity_id: int, action: str = "results") -> ActivityResults:
         """Results of a CLOSED activity; ActivityNotFound / PhaseConflict(action) otherwise."""
+        return self.load(activity_id, action)[1]
+
+    def load(self, activity_id: int, action: str = "results") -> tuple[Activity, ActivityResults]:
+        """The CLOSED activity (with units and slots) and its results, read in one connection."""
         conn = db.connect(self.db_path)
         try:
             activity = db.get_activity_with_units(conn, activity_id)
@@ -108,7 +112,7 @@ class ResultsService:
                 raise ActivityNotFound(activity_id)
             if activity.phase is not Phase.CLOSED:
                 raise PhaseConflict(activity_id, activity.phase, action)
-            return build_results(activity, db.list_dashboard_submissions(conn, activity_id))
+            return activity, build_results(activity, db.list_dashboard_submissions(conn, activity_id))
         finally:
             conn.close()
 

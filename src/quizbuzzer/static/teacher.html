@@ -52,6 +52,8 @@
     .dash-unit { margin: 0 0 16px; }
     .dash-unit h3 { margin: 0 0 6px; font-size: 15px; }
     .groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin: 0 0 16px; }
+    .answer { white-space: pre-wrap; }
+    ul.problems { margin: 6px 0 0; padding-left: 18px; }
     .groups div { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
   </style>
 </head>
@@ -147,6 +149,16 @@
       <h3 class="muted" style="font-size:14px;margin:0 0 6px">Groups</h3>
       <div id="dashboard-groups" class="groups"></div>
       <div id="dashboard-units"></div>
+    </section>
+
+    <section id="results-section" class="hidden" aria-live="polite">
+      <h2 id="results-title">Results</h2>
+      <div id="results-message" class="banner hidden" role="alert"></div>
+      <div class="actions">
+        <button type="button" id="export-button" class="primary">Export to sheet</button>
+      </div>
+      <div id="export-report" class="banner hidden" role="status"></div>
+      <div id="results-units"></div>
     </section>
 
     <p id="live-status" class="muted">Connecting…</p>

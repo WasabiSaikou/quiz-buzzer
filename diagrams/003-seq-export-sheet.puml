@@ -24,7 +24,7 @@ TUI -> API : POST /api/teacher/activities/{id}/export (cookie)
 API -> AUTH : require_teacher(request)
 AUTH --> API : ok (else 401 teacher_required)
 API -> EXP : export(activity_id)
-EXP -> RES : teacher_results(activity_id)
+EXP -> RES : load(activity_id, action="export")
 RES -> DB : read activity, units, slots, submissions
 alt activity not found
   RES --> EXP : raise ActivityNotFound
@@ -35,7 +35,7 @@ else phase DRAFT or OPEN
   EXP --> API : 409 phase_conflict "activity is <phase>"
   API --> TUI : 409, nothing written
 else phase = CLOSED
-  RES --> EXP : ActivityResults
+  RES --> EXP : (Activity with units + slots, ActivityResults)
   EXP -> EXP : winners = units with a rank-1 entry
   alt no winners (zero submissions)
     EXP --> API : ExportReport(cellsWritten 0, unitsSkipped = all)

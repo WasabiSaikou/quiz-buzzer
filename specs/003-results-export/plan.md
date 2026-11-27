@@ -34,7 +34,7 @@ The diagrams are the primary blueprint, and module and class names match them ex
 | Student UI | `static/student.html`, `student.js`: results screen when `state.results` is present (winner, rank order, 無人作答) |
 | `api/teacher_routes.py` | adds `GET /activities/closed` (before `/activities/{activity_id}`), `GET /activities/{id}/results`, `POST /activities/{id}/export`, `GET /activities/{id}/results.csv` |
 | Teacher guard | unchanged; covers the new routes by prefix |
-| Results service | **new** `services/results_service.py`: `build_results(activity, submissions)` (pure), `ResultsService(db_path)` with `teacher_results(activity_id)`, `results_for(activity)`, `list_closed()`, `results_csv(activity_id) -> (bytes, filename)`, `results_out(results)` / `csv_filename(...)` helpers |
+| Results service | **new** `services/results_service.py`: `build_results(activity, submissions)` (pure), `ResultsService(db_path)` with `teacher_results(activity_id)`, `load(activity_id, action) -> (Activity, ActivityResults)` (added during implementation: the exporter needs the stored units and slots too, read in the same connection), `results_for(activity)`, `list_closed()`, `results_csv(activity_id) -> (bytes, filename)`, `results_out(results)` / `csv_filename(...)` helpers |
 | CSV writer | **new** `services/csv_export.py: to_csv(results) -> bytes` (pure) |
 | Sheet exporter | **new** `services/sheet_exporter.py`: `format_cell(kind, sub_part, text)`, `plan_export(activity, results, preview) -> list[CellWrite]` (pure; raises `ExportBlocked`), `SheetExporter(adapter, writer, results_service)` with `export(activity_id) -> ExportReport`; exceptions `ExportBlocked(problems)`, `ExportNotShared(email)` |
 | Visibility filter | `services/visibility.py: student_view(activity, participant, members, own_submissions, *, results=None)` |
@@ -57,6 +57,10 @@ The diagrams are the primary blueprint, and module and class names match them ex
 - After `/speckit-analyze` (I1): `003-seq-view-results` and `system-component` call
   `ResultsService.results_for(activity)` (was `build_results(activity)`); `domain-class` drops
   `ActivityResults.forStudent()`: the student form is produced by `student_view`.
+
+**Diagram changes made during implementation** (re-rendered, exit 0):
+- US2: `003-seq-export-sheet`: `EXP -> RES` is `load(activity_id, action="export")`, which returns
+  the activity (units and slots) with its results; was `teacher_results(activity_id)`.
 
 ## Technical Context
 

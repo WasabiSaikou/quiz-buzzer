@@ -223,3 +223,37 @@ def run_activity(
 
     activity = ActivityService(fake_adapter, db_path).get_activity(activity.id)  # current phase
     return activity, part, tokens
+
+
+def run_sheet_activity(
+    fake_adapter,
+    db_path,
+    spreadsheet_id: str,
+    sheet_id: int,
+    plays,
+    *,
+    group_count: int = 6,
+    final_phase: str = "CLOSED",
+):
+    """Like run_activity, but on any fake spreadsheet tab. `plays`: (unit_number, group[, texts])."""
+    from quizbuzzer.services.activity_service import ActivityService
+    from quizbuzzer.services.participation_service import ParticipationService
+
+    init_schema(db_path)
+    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
+    svc = ActivityService(fake_adapter, db_path)
+    preview = svc.preview_import(url, sheet_id)
+    activity = svc.create_from_import(url, sheet_id, group_count, preview.fingerprint, True)
+    part = ParticipationService(db_path)
+    tokens: dict[int, str] = {}
+    for play in plays:
+        if play[1] not in tokens:
+            tokens[play[1]], _ = part.join(None, activity.id, play[1], f"名{play[1]}")
+    if final_phase != "DRAFT":
+        set_db_phase(db_path, activity.id, "OPEN")
+    for play in plays:
+        unit = next(u for u in activity.units if u.number == play[0])
+        part.submit(tokens[play[1]], unit.id, answers_for(unit, play[2] if len(play) > 2 else None))
+    if final_phase not in ("DRAFT", "OPEN"):
+        set_db_phase(db_path, activity.id, final_phase)
+    return svc.get_activity(activity.id)

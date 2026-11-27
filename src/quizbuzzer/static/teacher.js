@@ -11,6 +11,8 @@ const state = {
   mode: "create", // "create" a new activity, or "reimport" into state.current (US3)
   dashboard: null, // latest dashboard.state for state.current (002)
   importAfterClose: false, // teacher chose "Import a new worksheet" under a CLOSED activity
+  results: null, // 003: TeacherResults shown in the results panel (current CLOSED or a past one)
+  viewingPast: false, // 003 US4: the results panel shows a past activity chosen from the list
   socket: null,
 };
 
@@ -90,8 +92,12 @@ function hideMessage(box) {
 }
 
 function showApiError(box, err) {
-  if (err.code === "not_shared" && err.details.serviceAccountEmail) {
+  const emailCodes = ["not_shared", "export_not_shared", "sheet_read_only"]; // 003 FR-013
+  if (emailCodes.includes(err.code) && err.details.serviceAccountEmail) {
     showMessage(box, err.message, "error", el("code", {}, err.details.serviceAccountEmail));
+  } else if (err.code === "export_blocked" && err.details.problems) {
+    // 003 FR-009: every missing question / sub-part or sheet error is listed.
+    showMessage(box, err.message, "error", el("ul", { class: "problems" }, ...err.details.problems.map((p) => el("li", {}, p.message))));
   } else {
     showMessage(box, err.message || String(err));
   }
@@ -278,6 +284,8 @@ function showCurrent(activity) {
   $("import-section").classList.toggle("hidden", !importing);
   if (!importing) $("preview-section").classList.add("hidden");
   renderDashboard();
+  if (closed && state.results?.activityId !== activity.id) loadResults(activity.id); // 003
+  if (!closed && state.results && !state.viewingPast) showResults(null);
   if (!hasCurrent) return;
   $("reimport-button").classList.toggle("hidden", activity.phase !== "DRAFT");
   $("open-button").classList.toggle("hidden", activity.phase !== "DRAFT");
@@ -337,6 +345,79 @@ function renderDashboard() {
     }),
   );
 }
+
+// --- Results, export (feature 003) -------------------------------------------------------
+
+function answerText(answers, kind) {
+  return answers.map((a) => (kind === "GROUP_SET" ? `（${a.subPart}）` : "") + a.text).join("\n");
+}
+
+async function loadResults(activityId) {
+  hideMessage($("results-message"));
+  try {
+    showResults(await api("GET", `/api/teacher/activities/${activityId}/results`));
+  } catch (err) {
+    showResults(null);
+    showApiError($("current-message"), err);
+  }
+}
+
+function showResults(results) {
+  state.results = results;
+  hideMessage($("export-report"));
+  $("results-section").classList.toggle("hidden", !results);
+  if (!results) return;
+  $("results-title").textContent = `Results — ${results.title}`;
+  $("results-units").replaceChildren(
+    ...results.units.map((u) => {
+      const head = el("h3", {}, `Question ${u.number}`, " ", kindLabel(u.kind));
+      if (u.submissions.length === 0) return el("div", { class: "dash-unit" }, head, el("p", { class: "muted" }, "無人作答"));
+      const w = u.submissions[0];
+      const rows = u.submissions.map((s) =>
+        el(
+          "tr",
+          {},
+          el("td", {}, s.isWinner ? el("span", { class: "tag winner" }, `#${s.rank} winner`) : `#${s.rank}`),
+          el("td", {}, `Group ${s.groupNumber}`),
+          el("td", {}, s.submittedBy),
+          el("td", { class: "answer" }, answerText(s.answers, u.kind)),
+          el("td", {}, formatTime(s.receivedAt)),
+        ),
+      );
+      return el(
+        "div",
+        { class: "dash-unit" },
+        head,
+        el("p", {}, el("strong", {}, `Winner: Group ${w.groupNumber}`), " — ", el("span", { class: "answer" }, answerText(w.answers, u.kind))),
+        el("table", {}, el("thead", {}, el("tr", {}, ...["Rank", "Group", "Submitted by", "Answer", "Received"].map((h) => el("th", {}, h)))), el("tbody", {}, ...rows)),
+      );
+    }),
+  );
+}
+
+$("export-button").addEventListener("click", async (ev) => {
+  const r = state.results;
+  if (!r) return;
+  const question =
+    `Export the winning answers of "${r.title}" into its Google Sheet?\n\n` +
+    "The answer cells of every answered question will be overwritten (unanswered questions are left as they are).";
+  if (!window.confirm(question)) return; // 003 FR-006
+  hideMessage($("results-message"));
+  hideMessage($("export-report"));
+  ev.target.disabled = true;
+  try {
+    const rep = await api("POST", `/api/teacher/activities/${r.activityId}/export`);
+    showMessage(
+      $("export-report"),
+      `${rep.cellsWritten} cell(s) written. ${rep.unitsSkipped} question(s) had no answer and were left unchanged.`,
+      "info",
+    );
+  } catch (err) {
+    showApiError($("results-message"), err);
+  } finally {
+    ev.target.disabled = false;
+  }
+});
 
 async function phaseAction(button, method, path, question) {
   if (!window.confirm(question)) return; // FR-007: these actions cannot be undone

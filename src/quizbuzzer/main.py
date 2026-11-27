@@ -21,7 +21,7 @@ from quizbuzzer.api import auth_routes, student_routes, teacher_routes, ws_route
 from quizbuzzer.api.auth import TeacherGuardMiddleware, TeacherSessions, WrongPasscode
 from quizbuzzer.api.schemas import PreviewResponse
 from quizbuzzer.config import PASSCODE_MISSING, ConfigError, Settings, load_settings
-from quizbuzzer.models import SpreadsheetInfo, TabData
+from quizbuzzer.models import CellWrite, SpreadsheetInfo, TabData
 from quizbuzzer.realtime.hub import RealtimeHub
 from quizbuzzer.services.participation_service import (
     ActivityEnded,
@@ -49,10 +49,12 @@ from quizbuzzer.services.activity_service import (
     WarningsNotAcknowledged,
 )
 from quizbuzzer.services.results_service import ResultsService
+from quizbuzzer.services.sheet_exporter import ExportBlocked, ExportNotShared, SheetExporter
 from quizbuzzer.services.sheets_adapter import (
     InvalidSheetUrl,
     SheetNotFound,
     SheetNotShared,
+    SheetReadOnly,
     SheetsAdapter,
     SheetsUnavailable,
     SheetsWriter,
@@ -117,6 +119,65 @@ class LazyGoogleSheetsAdapter:
 
     def read_tab(self, spreadsheet_id: str, sheet_id: int) -> TabData:
         return self._get().read_tab(spreadsheet_id, sheet_id)
+
+
+class LazyGoogleSheetsWriter:
+    """Builds the write-scoped GoogleSheetsWriter on first export (003 research R1)."""
+
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+        self._inner: SheetsWriter | None = None
+
+    @property
+    def service_account_email(self) -> str:
+        return self._settings.service_account_email
+
+    def write_cells(self, spreadsheet_id: str, sheet_id: int, tab_title: str, cells: list[CellWrite]) -> int:
+        if self._inner is None:
+            from quizbuzzer.services.google_sheets_writer import GoogleSheetsWriter
+
+            self._inner = GoogleSheetsWriter(self._settings)
+        return self._inner.write_cells(spreadsheet_id, sheet_id, tab_title, cells)
+
+
+def _register_export_errors(app: FastAPI) -> None:
+    """003 contracts/rest-api.md › export. Details never carry answer text."""
+    register_error(
+        app,
+        ExportBlocked,
+        409,
+        "export_blocked",
+        lambda e: str(e),
+        lambda e: {  # type: ignore[attr-defined]
+            "problems": [
+                {
+                    "kind": p.kind,
+                    "questionNumber": p.question_number,
+                    "subPart": p.sub_part,
+                    "code": p.code,
+                    "message": p.message,
+                }
+                for p in e.problems
+            ]
+        },
+    )
+    register_error(
+        app,
+        ExportNotShared,
+        403,
+        "export_not_shared",
+        lambda e: str(e),
+        lambda e: {"serviceAccountEmail": e.service_account_email},  # type: ignore[attr-defined]
+    )
+    register_error(
+        app,
+        SheetReadOnly,
+        403,
+        "sheet_read_only",
+        "The app can read this spreadsheet but not edit it. Give the address below Editor "
+        "access, then export again. Nothing was written.",
+        lambda e: {"serviceAccountEmail": e.service_account_email},  # type: ignore[attr-defined]
+    )
 
 
 def _register_core_errors(app: FastAPI) -> None:
@@ -275,7 +336,7 @@ def create_app(
     app.state.db_path = db_path
     app.state.adapter = adapter if adapter is not None else LazyGoogleSheetsAdapter(settings)
     # 003 research R1: a separate, write-scoped client used only by the export.
-    app.state.writer = writer
+    app.state.writer = writer if writer is not None else LazyGoogleSheetsWriter(settings)
     app.state.hub = RealtimeHub()
     app.state.results = ResultsService(db_path)
     app.state.participation = ParticipationService(
@@ -288,6 +349,7 @@ def create_app(
         student_publisher=app.state.participation.publish_student_states,
     )
     app.state.participation.teacher_publisher = app.state.service.publish_dashboard
+    app.state.exporter = SheetExporter(app.state.adapter, app.state.writer, app.state.results)
     app.state.teacher_sessions = TeacherSessions(settings.teacher_passcode.strip())
 
     _register_core_errors(app)
@@ -295,6 +357,7 @@ def create_app(
     _register_auth_errors(app)
     _register_phase_errors(app)
     _register_student_errors(app)
+    _register_export_errors(app)
     app.add_middleware(TeacherGuardMiddleware)
     app.include_router(auth_routes.router)
     app.include_router(teacher_routes.router)

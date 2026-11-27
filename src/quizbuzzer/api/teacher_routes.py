@@ -22,6 +22,7 @@ from quizbuzzer.api.schemas import (
     TabsResponse,
 )
 from quizbuzzer.services.activity_service import ActivityService
+from quizbuzzer.services.results_service import results_out
 
 router = APIRouter(prefix="/api/teacher")
 
@@ -87,6 +88,23 @@ def end_activity(activity_id: int, request: Request) -> ActivityResponse:
 def get_dashboard(activity_id: int, request: Request) -> dict[str, Any]:
     """002 FR-026 - FR-029 (contracts/rest-api.md: Dashboard)."""
     return _service(request).get_dashboard(activity_id)
+
+
+@router.get("/activities/{activity_id}/results")
+def get_results(activity_id: int, request: Request) -> dict[str, Any]:
+    """003 FR-001, FR-005 (contracts/rest-api.md: TeacherResults); CLOSED only."""
+    return results_out(request.app.state.results.teacher_results(activity_id))
+
+
+@router.post("/activities/{activity_id}/export")
+def export_to_sheet(activity_id: int, request: Request) -> dict[str, Any]:
+    """003 FR-006 - FR-013 (diagrams/003-seq-export-sheet.puml)."""
+    report = request.app.state.exporter.export(activity_id)
+    return {
+        "cellsWritten": report.cells_written,
+        "unitsWritten": report.units_written,
+        "unitsSkipped": report.units_skipped,
+    }
 
 
 @router.post("/activities/{activity_id}/reimport/preview", response_model=PreviewResponse)

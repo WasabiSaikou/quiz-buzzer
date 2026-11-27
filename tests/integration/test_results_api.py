@@ -91,3 +91,42 @@ def test_refresh_after_close_returns_results(client, student_client):
     first = s1.get("/api/student/state").json()
     again = s1.get("/api/student/state").json()
     assert first == again and "results" in again
+
+
+# --- Teacher part (US2, T020) -----------------------------------------------------------------
+
+
+def test_teacher_results_for_closed_activity(client, student_client):
+    a, _ = played(client, student_client)
+    end(client, a)
+    r = client.get(f"/api/teacher/activities/{a['id']}/results")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert set(body) == {"activityId", "title", "phase", "groupCount", "units"}
+    assert body["activityId"] == a["id"] and body["phase"] == "CLOSED" and body["groupCount"] == 6
+    unit2 = body["units"][1]
+    assert [(e["rank"], e["groupNumber"], e["submittedBy"]) for e in unit2["submissions"]] == [
+        (1, 4, "名4"), (2, 1, "名1"), (3, 6, "名6"),
+    ]
+    assert unit2["submissions"][0]["isWinner"] is True
+    assert unit2["submissions"][0]["receivedAt"].endswith("Z")
+    assert body["units"][2]["submissions"] == []
+
+
+def test_teacher_results_refused_while_open(client, student_client):
+    a, _ = played(client, student_client)
+    r = client.get(f"/api/teacher/activities/{a['id']}/results")
+    assert r.status_code == 409
+    err = r.json()["error"]
+    assert err["code"] == "phase_conflict" and err["details"] == {"phase": "OPEN"}
+
+
+def test_teacher_results_refused_while_draft(client):
+    a = create_activity(client)
+    r = client.get(f"/api/teacher/activities/{a['id']}/results")
+    assert r.status_code == 409 and r.json()["error"]["details"] == {"phase": "DRAFT"}
+
+
+def test_teacher_results_unknown_activity(client):
+    r = client.get("/api/teacher/activities/999/results")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
