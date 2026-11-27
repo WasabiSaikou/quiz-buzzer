@@ -61,6 +61,24 @@ def current_activity(request: Request) -> CurrentActivityResponse:
     )
 
 
+# 003 FR-023: declared before /activities/{activity_id} so "closed" is not parsed as an id.
+@router.get("/activities/closed")
+def closed_activities(request: Request) -> dict[str, Any]:
+    return {
+        "activities": [
+            {
+                "id": p.activity_id,
+                "title": p.title,
+                "createdAt": p.created_at,
+                "groupCount": p.group_count,
+                "unitCount": p.unit_count,
+                "submissionCount": p.submission_count,
+            }
+            for p in request.app.state.results.list_closed()
+        ]
+    }
+
+
 @router.get("/activities/{activity_id}", response_model=ActivityResponse)
 def get_activity(activity_id: int, request: Request) -> ActivityResponse:
     return ActivityResponse.from_activity(_service(request).get_activity(activity_id))

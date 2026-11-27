@@ -244,6 +244,20 @@ def list_closed_activity_ids(conn: sqlite3.Connection) -> list[int]:
     return [r[0] for r in conn.execute("SELECT id FROM activities WHERE phase = 'CLOSED' ORDER BY id")]
 
 
+def list_closed_activities(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """003 FR-023 / research R7: CLOSED activities with unit and submission counts, newest first.
+
+    Ids only grow, so `id DESC` is newest first without a closed_at column.
+    """
+    return conn.execute(
+        "SELECT a.id, a.title, a.created_at, a.group_count, "
+        "(SELECT count(*) FROM question_units u WHERE u.activity_id = a.id) AS unit_count, "
+        "(SELECT count(*) FROM submissions s JOIN question_units u ON s.unit_id = u.id "
+        " WHERE u.activity_id = a.id) AS submission_count "
+        "FROM activities a WHERE a.phase = 'CLOSED' ORDER BY a.id DESC"
+    ).fetchall()
+
+
 def set_phase(conn: sqlite3.Connection, activity_id: int, phase: Phase) -> None:
     """Change the phase; the caller checks the transition inside its transaction (FR-006)."""
     conn.execute("UPDATE activities SET phase = ? WHERE id = ?", (phase.value, activity_id))

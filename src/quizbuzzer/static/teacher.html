@@ -163,6 +163,20 @@
       <div id="results-units"></div>
     </section>
 
+    <section id="past-section" class="hidden">
+      <h2>Past activities</h2>
+      <div class="actions">
+        <button type="button" id="past-refresh">Show past activities</button>
+        <button type="button" id="past-back" class="hidden">Back to the current activity</button>
+      </div>
+      <div id="past-message" class="banner hidden" role="alert"></div>
+      <p id="past-empty" class="muted hidden">No past activities.</p>
+      <table id="past-table" class="hidden">
+        <thead><tr><th>Activity</th><th>Created</th><th>Groups</th><th>Questions</th><th>Submissions</th><th></th></tr></thead>
+        <tbody id="past-rows"></tbody>
+      </table>
+    </section>
+
     <p id="live-status" class="muted">Connecting…</p>
   </main>
   <script type="module" src="/static/teacher.js"></script>

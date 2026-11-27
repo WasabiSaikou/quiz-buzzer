@@ -169,13 +169,13 @@ implementation task it covers. Record the red run in `docs/verification.md` › 
 
 ### Tests for User Story 4 (write first, observe failing) ⚠️
 
-- [ ] T030 [P] [US4] Extend `tests/unit/test_results_service.py` with `list_closed()`: only CLOSED activities, newest first, each with `unit_count` and `submission_count` (data-model.md › PastActivitySummary); empty list when none.
-- [ ] T031 [P] [US4] Write `tests/integration/test_past_activities_api.py`: close A, create and close B, create a DRAFT C; `GET /api/teacher/activities/closed` lists B then A (not C) with the contract fields; `GET …/A/results` returns A's results, not B's; empty list when no CLOSED activity. Assert in `tests/integration/test_teacher_guard.py` that `/api/teacher/activities/closed`, `…/results`, `…/export`, `…/results.csv` are in the guarded route set.
+- [X] T030 [P] [US4] Extend `tests/unit/test_results_service.py` with `list_closed()`: only CLOSED activities, newest first, each with `unit_count` and `submission_count` (data-model.md › PastActivitySummary); empty list when none.
+- [X] T031 [P] [US4] Write `tests/integration/test_past_activities_api.py`: close A, create and close B, create a DRAFT C; `GET /api/teacher/activities/closed` lists B then A (not C) with the contract fields; `GET …/A/results` returns A's results, not B's; empty list when no CLOSED activity. Assert in `tests/integration/test_teacher_guard.py` that `/api/teacher/activities/closed`, `…/results`, `…/export`, `…/results.csv` are in the guarded route set.
 
 ### Implementation for User Story 4
 
-- [ ] T032 [US4] Add `db.list_closed_activities(conn)` in `src/quizbuzzer/db.py`, `ResultsService.list_closed()`, and `GET /activities/closed` (declared before `/activities/{activity_id}`) in `src/quizbuzzer/api/teacher_routes.py`. Make T030 and T031 pass.
-- [ ] T033 [US4] Teacher UI: a "Past activities" panel in `src/quizbuzzer/static/teacher.html` / `teacher.js` listing title, created date, groups, units, submissions; opening one loads it into the US2 results panel (export and CSV included); "No past activities" when empty.
+- [X] T032 [US4] Add `db.list_closed_activities(conn)` in `src/quizbuzzer/db.py`, `ResultsService.list_closed()`, and `GET /activities/closed` (declared before `/activities/{activity_id}`) in `src/quizbuzzer/api/teacher_routes.py`. Make T030 and T031 pass.
+- [X] T033 [US4] Teacher UI: a "Past activities" panel in `src/quizbuzzer/static/teacher.html` / `teacher.js` listing title, created date, groups, units, submissions; opening one loads it into the US2 results panel (export and CSV included); "No past activities" when empty.
 
 **Checkpoint**: full suite green; commit "feat(003): US4".
 

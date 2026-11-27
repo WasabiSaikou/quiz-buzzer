@@ -16,6 +16,7 @@ from quizbuzzer import db
 from quizbuzzer.models import (
     Activity,
     ActivityResults,
+    PastActivitySummary,
     Phase,
     ResultEntry,
     Submission,
@@ -124,6 +125,26 @@ class ResultsService:
             return build_results(activity, db.list_dashboard_submissions(conn, activity.id))
         finally:
             conn.close()
+
+    # --- Past activities (US4; diagrams/003-seq-past-activities.puml) -----------------------
+
+    def list_closed(self) -> list[PastActivitySummary]:
+        conn = db.connect(self.db_path)
+        try:
+            rows = db.list_closed_activities(conn)
+        finally:
+            conn.close()
+        return [
+            PastActivitySummary(
+                activity_id=r["id"],
+                title=r["title"],
+                created_at=r["created_at"],
+                group_count=r["group_count"],
+                unit_count=r["unit_count"],
+                submission_count=r["submission_count"],
+            )
+            for r in rows
+        ]
 
     # --- CSV (US3; diagrams/003-seq-download-csv.puml) ----------------------------------------
 

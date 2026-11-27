@@ -108,3 +108,28 @@ def test_results_out_matches_contract_shape(db_path, closed):
     assert first["rank"] == 1 and first["isWinner"] is True and first["groupNumber"] == 4
     assert first["answers"] == [{"subPart": 1, "text": "四"}]
     assert unit3["submissions"] == []
+
+
+# --- US4: past CLOSED activities (T030; data-model.md › PastActivitySummary) ----------------
+
+
+def test_list_closed_newest_first_with_counts(fake_adapter, db_path):
+    from tests.live_helpers import run_sheet_activity
+
+    a = run_sheet_activity(fake_adapter, db_path, "template_group", 0, [(1, 2), (1, 3), (3, 2)])
+    b = run_sheet_activity(fake_adapter, db_path, "template_single", 0, [(2, 4)])
+    c = run_sheet_activity(fake_adapter, db_path, "template_single", 0, [], final_phase="DRAFT")
+    listed = ResultsService(db_path).list_closed()
+    assert [p.activity_id for p in listed] == [b.id, a.id]  # newest first; DRAFT c absent
+    assert c.id not in [p.activity_id for p in listed]
+    pb, pa = listed
+    assert (pa.title, pa.group_count, pa.unit_count, pa.submission_count) == (a.title, 6, 4, 3)
+    assert (pb.unit_count, pb.submission_count) == (6, 1)
+    assert pa.created_at == a.created_at
+
+
+def test_list_closed_empty(fake_adapter, db_path):
+    from tests.live_helpers import init_schema
+
+    init_schema(db_path)
+    assert ResultsService(db_path).list_closed() == []

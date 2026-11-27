@@ -284,8 +284,11 @@ function showCurrent(activity) {
   $("import-section").classList.toggle("hidden", !importing);
   if (!importing) $("preview-section").classList.add("hidden");
   renderDashboard();
-  if (closed && state.results?.activityId !== activity.id) loadResults(activity.id); // 003
-  if (!closed && state.results && !state.viewingPast) showResults(null);
+  $("past-section").classList.remove("hidden"); // 003 US4: available once unlocked
+  if (!state.viewingPast) {
+    if (closed && state.results?.activityId !== activity.id) loadResults(activity.id); // 003
+    if (!closed && state.results) showResults(null);
+  }
   if (!hasCurrent) return;
   $("reimport-button").classList.toggle("hidden", activity.phase !== "DRAFT");
   $("open-button").classList.toggle("hidden", activity.phase !== "DRAFT");
@@ -418,6 +421,52 @@ $("export-button").addEventListener("click", async (ev) => {
   } finally {
     ev.target.disabled = false;
   }
+});
+
+// --- Past CLOSED activities (003 US4, FR-023) ----------------------------------------------
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(undefined, { hour12: false });
+}
+
+async function loadPast() {
+  hideMessage($("past-message"));
+  try {
+    const { activities } = await api("GET", "/api/teacher/activities/closed");
+    $("past-empty").classList.toggle("hidden", activities.length > 0);
+    $("past-table").classList.toggle("hidden", activities.length === 0);
+    $("past-rows").replaceChildren(
+      ...activities.map((a) => {
+        const open = el("button", { type: "button" }, "Open results");
+        open.addEventListener("click", () => {
+          state.viewingPast = true;
+          $("past-back").classList.remove("hidden");
+          loadResults(a.id).then(() => $("results-section").scrollIntoView({ behavior: "smooth" }));
+        });
+        return el(
+          "tr",
+          {},
+          el("td", {}, a.title),
+          el("td", {}, formatDate(a.createdAt)),
+          el("td", {}, String(a.groupCount)),
+          el("td", {}, String(a.unitCount)),
+          el("td", {}, String(a.submissionCount)),
+          el("td", {}, open),
+        );
+      }),
+    );
+  } catch (err) {
+    showApiError($("past-message"), err);
+  }
+}
+
+$("past-refresh").addEventListener("click", loadPast);
+$("past-back").addEventListener("click", () => {
+  state.viewingPast = false;
+  $("past-back").classList.add("hidden");
+  showResults(null);
+  if (state.current) showCurrent(state.current); // reloads the current CLOSED results if any
 });
 
 async function phaseAction(button, method, path, question) {
